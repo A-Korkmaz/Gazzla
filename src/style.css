@@ -1,0 +1,881 @@
+:root {
+  --bg: #0b0f1a;
+  --card: #141a2a;
+  --border: #232b40;
+  --text: #f1f5f9;
+  --muted: #8b95ab;
+  --fire-1: #ff7a18;
+  --fire-2: #ffd166;
+  --green: #10b981;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(255, 122, 24, 0.18), transparent 55%),
+    var(--bg);
+}
+
+#app {
+  width: 100%;
+  max-width: 440px;
+  padding: 20px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---------- Üst kısım ---------- */
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(90deg, var(--fire-1), var(--fire-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.streak {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 600;
+  filter: grayscale(1);
+}
+
+.streak.on {
+  color: var(--fire-2);
+  border-color: rgba(255, 122, 24, 0.5);
+  filter: none;
+  box-shadow: 0 0 18px rgba(255, 122, 24, 0.25);
+}
+
+/* ---------- Kartlar ---------- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+
+.goal-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.goal-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.goal-edit input {
+  width: 72px;
+  padding: 4px 8px;
+}
+
+.bar {
+  height: 10px;
+  border-radius: 999px;
+  background: #0e1322;
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--fire-1), var(--fire-2));
+  transition: width 0.6s ease;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---------- Dairesel zamanlayıcı ---------- */
+
+.ring-wrap {
+  position: relative;
+  width: min(280px, 78vw);
+  aspect-ratio: 1;
+  margin: 4px auto 0;
+}
+
+.ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg); /* 12 yönünden başlasın */
+}
+
+.ring-track {
+  fill: none;
+  stroke: #1a2135;
+  stroke-width: 12;
+}
+
+.ring-progress {
+  fill: none;
+  stroke-width: 12;
+  stroke-linecap: round;
+  stroke: url(#grad-work);
+  transition: stroke-dashoffset 0.3s linear;
+}
+
+.ring-wrap.break .ring-progress {
+  stroke: url(#grad-break);
+}
+
+.ring-wrap.work .ring {
+  filter: drop-shadow(0 0 14px rgba(255, 122, 24, 0.35));
+}
+
+.ring-wrap.break .ring {
+  filter: drop-shadow(0 0 14px rgba(16, 185, 129, 0.3));
+}
+
+.ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.clock {
+  font-size: 56px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ring-sub {
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 70%;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hype {
+  margin: 0;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 600;
+  min-height: 1.4em;
+}
+
+/* ---------- Form ve düğmeler ---------- */
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #cbd5e1;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+input {
+  padding: 11px 12px;
+  font-size: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #0e1322;
+  color: inherit;
+  outline: none;
+}
+
+input:focus {
+  border-color: var(--fire-1);
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+}
+
+.row button {
+  flex: 1;
+}
+
+button {
+  padding: 15px;
+  font-size: 17px;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  color: var(--text);
+  background: #232b40;
+  transition: transform 0.1s ease, filter 0.2s ease;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+button.primary {
+  background: linear-gradient(90deg, var(--fire-1), var(--fire-2));
+  color: #2b1300;
+  box-shadow: 0 6px 24px rgba(255, 122, 24, 0.35);
+}
+
+button.primary:hover {
+  filter: brightness(1.08);
+}
+
+button.small {
+  padding: 5px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+button.icon {
+  padding: 2px 6px;
+  font-size: 15px;
+  background: none;
+  color: var(--muted);
+}
+
+/* ---------- Efektler ---------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #1e2638;
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  font-weight: 600;
+  z-index: 20;
+  transition: opacity 0.4s ease;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.toast.hide {
+  opacity: 0;
+}
+
+.confetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ---------- Ders seçimi ---------- */
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+button.icon.big {
+  font-size: 22px;
+  padding: 4px 6px;
+}
+
+.subject-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: #cbd5e1;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button.chip {
+  padding: 7px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: #0e1322;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+button.chip.selected {
+  background: rgba(255, 122, 24, 0.15);
+  border-color: var(--fire-1);
+  color: var(--fire-2);
+}
+
+/* ---------- İstatistik ekranı ---------- */
+
+.card-title {
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.totals {
+  display: flex;
+  justify-content: space-around;
+  text-align: center;
+}
+
+.totals div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.totals strong {
+  font-size: 22px;
+}
+
+.days {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  height: 160px;
+}
+
+.day {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.day-bar {
+  height: 120px;
+  width: 22px;
+  display: flex;
+  align-items: flex-end;
+  background: #0e1322;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.day-fill {
+  width: 100%;
+  border-radius: 6px;
+  background: linear-gradient(0deg, var(--fire-1), var(--fire-2));
+}
+
+.day-fill.met {
+  background: linear-gradient(0deg, var(--green), #60a5fa);
+}
+
+.day-label {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.day-min {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed rgba(255, 209, 102, 0.5);
+  pointer-events: none;
+}
+
+.goal-line span {
+  position: absolute;
+  right: 0;
+  top: -16px;
+  font-size: 10px;
+  color: var(--fire-2);
+}
+
+table.subjects {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.subjects th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  padding-bottom: 8px;
+}
+
+.subjects td {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.subjects th:not(:first-child),
+.subjects td:not(:first-child) {
+  text-align: right;
+}
+
+/* ---------- Dersler ekranı ---------- */
+
+button.chip.add {
+  border-style: dashed;
+  color: var(--fire-2);
+}
+
+button.back {
+  align-self: flex-start;
+  padding: 6px 0;
+  font-size: 15px;
+  font-weight: 600;
+  background: none;
+  color: var(--muted);
+}
+
+.inline-form {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inline-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.inline-form button.small {
+  padding: 11px 14px;
+}
+
+button.small.primary {
+  box-shadow: none;
+}
+
+.subject-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.subject-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.subject-row:first-child {
+  border-top: none;
+}
+
+.subject-row .inline-form {
+  flex: 1;
+}
+
+.subject-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.subject-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subject-info .muted {
+  font-size: 13px;
+}
+
+.subject-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+button.ghost {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+button.danger {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.hint {
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.empty {
+  padding: 8px 0;
+}
+
+/* ---------- Duraklatma ---------- */
+
+.ring-wrap.paused .ring {
+  opacity: 0.45;
+  filter: none;
+}
+
+.ring-wrap.paused .clock {
+  animation: blink 1.4s ease-in-out infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---------- Haftalık hedef (iki satırlı hedef kartı) ---------- */
+.goal-row + .goal-row {
+  margin-top: 14px;
+}
+
+.goal-row.met .fill {
+  background: linear-gradient(90deg, var(--green), #60a5fa);
+}
+
+.small-note {
+  font-size: 11px;
+}
+
+/* ---------- Sol menü ---------- */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 50;
+  animation: fade-in 0.2s ease;
+}
+
+.menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(300px, 82vw);
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  z-index: 51;
+  animation: slide-in 0.22s ease;
+}
+
+.menu-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.small-logo {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.menu-section {
+  margin: 12px 8px 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+
+button.menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+button.menu-item:hover:not(:disabled) {
+  background: #1b2236;
+}
+
+button.menu-item.active {
+  border-color: rgba(255, 122, 24, 0.5);
+  background: rgba(255, 122, 24, 0.08);
+}
+
+button.menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.menu-empty {
+  margin: 4px 12px;
+}
+
+@keyframes slide-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ---------- Ders modu ---------- */
+.locked-subject {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.goal-row.subject-goal .fill {
+  background: linear-gradient(90deg, #a78bfa, #60a5fa);
+}
+
+.goal-row.subject-goal.met .fill {
+  background: linear-gradient(90deg, var(--green), #60a5fa);
+}
+
+button.add-goal {
+  margin-top: 14px;
+  width: 100%;
+}
+
+/* ---------- "+ Proje" penceresi ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 60;
+  animation: fade-in 0.2s ease;
+}
+
+.modal {
+  width: min(380px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: pop-in 0.2s ease;
+}
+
+.modal input {
+  font-size: 17px;
+}
+
+@keyframes pop-in {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* ---------- Hesap ekranı ---------- */
+.account {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account p {
+  margin: 0;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sync-status {
+  font-size: 14px;
+}
+
+.sync-status.error {
+  color: #f87171;
+}
+
+/* ---------- Arkadaşlar ---------- */
+.together {
+  margin: -6px 0 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--fire-2);
+  min-height: 0;
+}
+
+.together:empty {
+  display: none;
+}
+
+.badge {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: var(--fire-1);
+  color: #fff;
+  font-size: 12px;
+  text-align: center;
+}
+
+.friend-list,
+.request-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.request-list {
+  margin-top: 12px;
+}
+
+.friend-row,
+.request-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #0e1322;
+}
+
+.request-row {
+  justify-content: space-between;
+}
+
+.request-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.friend-row.me {
+  border: 1px solid rgba(255, 122, 24, 0.45);
+}
+
+.rank {
+  width: 26px;
+  text-align: center;
+  font-size: 18px;
+}
+
+.friend-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.friend-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friend-times {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.friend-times strong {
+  font-size: 16px;
+}
+
+.remove-spacer {
+  width: 34px;
+}
