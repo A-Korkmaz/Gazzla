@@ -81,6 +81,7 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
   bilgisayar (geniş ekran) görünümü (2026-11-27), daraltılabilir menü + SVG menü ikonları + "Gazzla" yazımı (2026-11-27).
 - Açık küçük kontrol: Supabase → Authentication → URL Configuration → **Site URL** hâlâ `http://localhost:5173`
   olabilir; `https://gazzla-08t7.netlify.app` olmalı (yoksa arkadaşların kayıt onay e-postası localhost'a gider).
+- Google araması: `index.html`'de `meta description` var (2026-11-27). Search Console'a kayıt **bilerek yapılmadı** (site özel).
 - Bulutta `__test__` ve `__test2__` adlı iki `deleted = true` test satırı var; zararsız.
 
 ## Sırada
