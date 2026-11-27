@@ -2,8 +2,12 @@
 //
 // Dosyalar bu cihazda IndexedDB'de duruyor. localStorage birkaç MB'ı kaldırmaz; IndexedDB tarayıcının
 // büyük veriler (Blob'lar dahil) için olan veritabanı. Buluta ya da arkadaşlara gitmez.
-// Soru sorulunca işaretli materyaller /api/study/upload ile servise yüklenir (orada ~48 saat kalır,
-// süresi dolunca kendiliğinden yeniden yüklenir) ve soruya "şu dosyalara bak" diye eklenir.
+// Ders asistanı iki yoldan çalışır (sunucu ülkeye göre seçer, bkz. aiApi.ts):
+//   - Gemini yolu: işaretli materyaller sunucu üzerinden servise yüklenir (orada ~48 saat kalır, süresi
+//     dolunca kendiliğinden yeniden yüklenir) ve soruya "şu dosyalara bak" diye eklenir.
+//   - Groq yolu: yazı tarayıcıda çıkarılır (extract.ts) ve `pages` alanına kaydedilir.
+
+import { aiFetch } from "./aiApi";
 
 export interface Material {
   id: string;
@@ -13,7 +17,9 @@ export interface Material {
   addedAt: number;
   active: boolean; // soru sorarken kullanılsın mı (işaret kutusu)
   file: Blob;
-  remote?: { uri: string; mimeType: string; expiresAt: number }; // servisteki kopya
+  remote?: { uri: string; mimeType: string; expiresAt: number }; // servisteki kopya (Gemini yolu)
+  folder?: string; // klasörden eklendiyse üst klasörün adı (panelde gruplamak için)
+  pages?: string[]; // çıkarılmış sayfa yazıları (Groq yolu; bir kez okunur)
 }
 
 export const ACCEPT = ".pdf,.txt,.md,.csv,image/png,image/jpeg,image/webp,image/heic,image/heif";
@@ -74,8 +80,9 @@ async function save(m: Material): Promise<void> {
   else list.push(m);
 }
 
-export async function addMaterial(file: File): Promise<Material> {
+export async function addMaterial(file: File, folder?: string): Promise<Material> {
   const m: Material = {
+    folder,
     id: crypto.randomUUID(),
     name: file.name,
     mimeType: file.type || guessType(file.name),
@@ -91,6 +98,16 @@ export async function addMaterial(file: File): Promise<Material> {
 export async function setActive(id: string, active: boolean): Promise<void> {
   const m = (await loadMaterials()).find((x) => x.id === id);
   if (m) await save({ ...m, active });
+}
+
+/** Bir klasördeki bütün materyalleri birlikte açar/kapatır. */
+export async function setFolderActive(folder: string, active: boolean): Promise<void> {
+  for (const m of await loadMaterials()) if (m.folder === folder && m.active !== active) await save({ ...m, active });
+}
+
+export async function savePages(id: string, pages: string[]): Promise<void> {
+  const m = (await loadMaterials()).find((x) => x.id === id);
+  if (m) await save({ ...m, pages });
 }
 
 export async function removeMaterial(id: string): Promise<void> {
@@ -116,11 +133,7 @@ export function ensureUploaded(m: Material, force = false): Promise<Material> {
   const running = uploading.get(m.id);
   if (running) return running;
   const p = (async () => {
-    const res = await fetch("/api/study/upload", {
-      method: "POST",
-      headers: { "Content-Type": m.mimeType },
-      body: m.file,
-    });
+    const res = await aiFetch("upload", m.file, m.mimeType);
     const json = (await res.json().catch(() => ({}))) as { uri?: string; mimeType?: string; expiresAt?: number; error?: string };
     if (!res.ok || !json.uri) throw new Error(json.error ?? "upload");
     const updated: Material = { ...m, remote: { uri: json.uri, mimeType: json.mimeType ?? m.mimeType, expiresAt: json.expiresAt ?? Date.now() + 47 * 3600_000 } };

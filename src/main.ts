@@ -440,7 +440,7 @@ function render(): void {
     renderFriends();
   } else if (view === "timetable") {
     renderTimetable(timetableCtx);
-  } else if (import.meta.env.DEV && view === "assistant") {
+  } else if (view === "assistant") {
     renderAssistant(assistantCtx);
   } else if (running) {
     const subtitle =
@@ -844,6 +844,11 @@ const assistantCtx: AssistantCtx = {
     render();
   },
   setupSession: aiSetupSession,
+  signedIn: () => authUser !== null,
+  openAccount: () => {
+    view = "account";
+    render();
+  },
   contextText: assistantContext,
 };
 
@@ -956,7 +961,7 @@ function renderMenu(): void {
       ${item({ attrs: 'data-go="timetable"', active: view === "timetable", icon: ICONS.calendar, label: "Program" })}
       ${item({ attrs: 'data-go="goals"', active: view === "goals", icon: ICONS.target, label: "Hedefler" })}
       ${item({ attrs: 'data-go="stats"', active: view === "stats", icon: ICONS.stats, label: "İstatistikler" })}
-      ${import.meta.env.DEV ? item({ attrs: 'data-go="assistant"', active: view === "assistant", icon: ICONS.sparkle, label: "Gazzla AI" }) : ""}
+      ${item({ attrs: 'data-go="assistant"', active: view === "assistant", icon: ICONS.sparkle, label: "Gazzla AI" })}
       ${item({
         attrs: 'data-go="friends"',
         active: view === "friends",

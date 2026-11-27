@@ -86,30 +86,46 @@
   </div>
 
   <div class="card">
-    <h2>Gazzla AI (yapay zekâ asistanı, deneme aşamasında)</h2>
+    <h2>Gazzla AI (yapay zekâ asistanı)</h2>
     <p><strong>Önce açık bir not:</strong> Gazzla tamamen ücretsizdir ve öyle kalsın istiyoruz. Bu yüzden
       yapay zekâ için servislerin <strong>ücretsiz sürümlerini</strong> kullanıyoruz. Aşağıda gizlilikten
       verdiğimiz bütün ödünler bu yüzdendir: ücretli sürümler daha iyi gizlilik koşulları sunuyor ama
       para gerektiriyor. Gazzla bunlardan para kazanmaz, verilerini satmaz.</p>
+    <p>Gazzla AI'yı kullanmak için giriş yapman gerekir; her hesabın her gün kendi soru hakkı vardır. Bunun
+      için Supabase'te hesabına bağlı, günlük <strong>yalnızca soru sayılarını</strong> tutan bir sayaç var
+      (soruların içeriği değil). Servislerin anahtarları sunucudadır; senin tarayıcına hiç gelmez.</p>
     <p>Asistanın iki modu var. İkisini de yalnızca <strong>sen bir şey sorduğunda</strong> kullanırsın;
       sen sormadıkça hiçbir şey gönderilmez.</p>
     <ul>
       <li><strong>Koç</strong> (Groq): yazdığın mesajlar ve cevap verebilmesi için çalışma verinin kısa bir
         özeti (bugünkü ve haftalık süren, hedeflerin, proje adların ve bugünkü programın) Groq'a gönderilir.
         Programın, Google Takvim'deki "Gazzla" takviminden gelen bloklar içerebilir. Sesli konuşursan ses
-        kaydın yazıya çevrilmek için yine Groq'a gider.</li>
-      <li><strong>Ders asistanı</strong> (Google Gemini API): yazdığın mesajlar, eklediğin fotoğraflar, proje
-        adların ve işaretlediğin materyaller (PDF, not, fotoğraf) Google'a gönderilir. Materyaller Google'ın
-        sunucularında en fazla yaklaşık 48 saat kalır, sonra Google tarafından silinir; asıl kopyası yalnızca
-        senin cihazında durur. <strong>Ücretsiz sürümün bedeli:</strong> Google'ın şartlarına göre ücretsiz
-        sürüme gönderilen içerik Google'ın ürünlerini geliştirmek için kullanılabilir ve insanlar tarafından
-        incelenebilir. Bu yüzden ders asistanına kişisel ya da hassas bilgi içeren belge yükleme.</li>
+        kaydın yazıya çevrilmek için yine Groq'a gider. Groq'un sözleşmesine göre gönderilen içerik
+        model eğitiminde kullanılmaz.</li>
+      <li><strong>Ders asistanı</strong>: yazdığın mesajlar, eklediğin fotoğraflar, proje adların ve
+        işaretlediğin materyaller (PDF, not, fotoğraf) cevap üretilebilmesi için gönderilir. Hangi servise
+        gideceği <strong>bulunduğun ülkeye</strong> bağlıdır, çünkü servislerin kuralları ülkeye göre değişir:
+        <ul>
+          <li><strong>Avrupa Ekonomik Alanı, İsviçre ve İngiltere dışında</strong> (ör. Türkiye): Google Gemini API.
+            Materyaller Google'ın sunucularında en fazla yaklaşık 48 saat kalır. <strong>Ücretsiz sürümün
+            bedeli:</strong> Google'ın şartlarına göre bu bölgelerde ücretsiz sürüme gönderilen içerik Google'ın
+            ürünlerini geliştirmek için kullanılabilir ve insanlar tarafından incelenebilir. Bu yüzden kişisel
+            ya da hassas bilgi içeren belge yükleme.</li>
+          <li><strong>Avrupa Ekonomik Alanı, İsviçre ve İngiltere'de</strong>: Groq. Materyallerinin yazısı
+            senin tarayıcında çıkarılır (taranmış sayfalar Groq ile okunur) ve her soruda yalnızca soruyla
+            ilgili kısımlar gönderilir. Çıkarılan yazı yalnızca senin cihazında saklanır.</li>
+        </ul>
+      </li>
     </ul>
+    <p><strong>Ülkeni nasıl anlıyoruz:</strong> siteyi yayınlayan Netlify, bağlantından yalnızca ülke kodunu
+      (ör. "TR") çıkarır ve bunu imzalı bir fiş olarak verir. IP adresin hiçbir yere gönderilmez ve
+      saklanmaz; ülke kodu da kaydedilmez, yalnızca hangi servisin kullanılacağına karar vermek için kullanılır.</p>
+    <p>Materyallerinin asıl kopyası yalnızca <strong>senin cihazında</strong> durur. Sohbetlerin de (görseller
+      hariç, yalnızca yazılar) son 20 sohbet olarak yalnızca bu cihazda saklanır; istediğin zaman silebilirsin.
+      Asistan programına bir şey eklemeden önce her zaman onayını ister.</p>
     <p>Google Takvim'den alınan veriler (etkinliklerin, takvimlerin) <strong>hiçbir zaman</strong> ders
-      asistanına, yani Google'ın ücretsiz yapay zekâ servisine gönderilmez ve hiçbir yapay zekâ modelini
-      eğitmek için kullanılmaz. Koç'a giden program özeti yalnızca senin sorunu cevaplamak için kullanılır.</p>
-    <p>Sohbetler kaydedilmez; sayfayı kapatınca silinir. Asistan programına bir şey eklemeden önce her zaman
-      onayını ister.</p>
+      asistanına gönderilmez ve hiçbir yapay zekâ modelini eğitmek için kullanılmaz. Koç'a giden program
+      özeti yalnızca senin sorunu cevaplamak için kullanılır.</p>
   </div>
 
   <div class="card">
@@ -130,14 +146,18 @@
       APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements.
       Data received from Google APIs is never sold, shared, used for ads, sent to the AI study assistant,
       or used to train AI models.</p>
-    <p><strong>Gazzla AI (beta):</strong> Gazzla is free and we want to keep it that way, so the AI assistant
+    <p><strong>Gazzla AI:</strong> Gazzla is free and we want to keep it that way, so the AI assistant
       uses the <strong>free tiers</strong> of AI services; every privacy trade-off below exists only to keep
-      Gazzla free. Nothing is sent unless you ask something. The "Coach" mode sends your messages, a short
-      summary of your study data (times, goals, project names, today's schedule) and, if you speak, your voice
-      recording to Groq. The "Study assistant" mode sends your messages, photos, project names and the
-      materials you select to the Google Gemini API, where files are kept for about 48 hours. Under Google's
-      free-tier terms, content may be used to improve Google's products and may be reviewed by humans, so do
-      not upload personal or sensitive documents. Chats are not stored.</p>
+      Gazzla free. Signing in is required; a per-account daily counter stores only the number of questions.
+      Nothing is sent unless you ask something. The "Coach" mode sends your messages, a short summary of your
+      study data (times, goals, project names, today's schedule) and, if you speak, your voice recording to
+      Groq, which does not train on this content. The "Study assistant" sends your messages, photos, project
+      names and selected materials to a service chosen by your country: outside the EEA, Switzerland and the UK
+      it is the Google Gemini API, where files are kept for about 48 hours and, under Google's free-tier terms,
+      content may be used to improve Google's products and reviewed by humans (do not upload personal or
+      sensitive documents); inside the EEA, Switzerland and the UK it is Groq, and only excerpts extracted in
+      your browser are sent. Your country is derived by Netlify as a country code only; your IP address is not
+      sent anywhere or stored. Materials and chat text are stored only on your device.</p>
   </div>
 
   <p class="muted" style="margin-top:24px"><a href="/">← Gazzla'ya dön</a></p>

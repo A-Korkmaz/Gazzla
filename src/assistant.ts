@@ -1,8 +1,9 @@
-// "Gazzla AI" sayfası: kullanıcının çalışma verilerini bilen küçük bir sohbet asistanı.
-// Şimdilik yalnız localhost'ta (`npm run dev`): istekler vite.config.ts'teki /api/ai ve /api/transcribe
-// aracılarına gider, anahtar orada eklenir. Derlenmiş sitede (Netlify) menüde görünmez.
+// "Gazzla AI" sayfası: kullanıcının çalışma verilerini bilen sohbet asistanı.
+// İstekler aiApi.ts üzerinden sunucuya (supabase/functions/gazzla-ai) gider; anahtarlar orada.
+// Canlıda giriş şart ve herkesin günlük hakkı var. Sohbetler yalnız bu cihazda saklanır (görselsiz).
 //
-// İki mod var: "Koç" (Groq, vite.config.ts) ve "Ders asistanı" (Gemini, server/gemini.ts; materyaller study.ts'te).
+// İki mod var: "Koç" (Groq) ve "Ders asistanı" (ülkeye göre Gemini ya da Groq; materyaller study.ts'te,
+// Groq yolunda yazı çıkarma extract.ts'te).
 // Koç modu üç iş yapıyor:
 //   1. Sohbet (cevap parça parça gelir).
 //   2. Programa blok önerme: model "program_oner" aracını çağırır, biz bir önizleme kartı gösteririz;
@@ -13,6 +14,8 @@
 // main.ts'teki ortak şeyleri bir "ctx" nesnesiyle alıyoruz (timetableView.ts'teki gibi).
 
 import { toast } from "./effects";
+import { aiFetch, loadStatus, spent, statusNow } from "./aiApi";
+import { extractPages, pickContext } from "./extract";
 import {
   ACCEPT,
   addMaterial,
@@ -24,7 +27,9 @@ import {
   MAX_SIZE,
   removeMaterial,
   setActive,
+  setFolderActive,
   sizeText,
+  type Material,
 } from "./study";
 import { dayKey, loadSubjects } from "./storage";
 import { DAY_NAMES, putBlock, weekdayOf, type Block } from "./timetable";
@@ -42,6 +47,8 @@ export interface AssistantCtx {
   setupSession: (minutes: number, project: string | undefined, start: boolean) => { ok: boolean; text: string };
   /** Kullanıcının o anki verileri (süreler, hedefler, projeler, bugünkü program) düz metin olarak. */
   contextText: () => string;
+  signedIn: () => boolean; // canlıda Gazzla AI için giriş şart
+  openAccount: () => void; // Hesap (giriş) sayfasına geç
 }
 
 interface Proposal {
@@ -81,8 +88,71 @@ let mode: Mode = (() => {
 })();
 
 // Sohbet yalnız sayfa açık kaldığı sürece tutulur (kaydedilmez). C++'taki global bir std::vector<Msg> gibi.
-const histories: Record<Mode, Msg[]> = { coach: [], study: [] };
-const hist = () => histories[mode];
+// ---------- Sohbet geçmişi ----------
+// Her modun son 20 sohbeti bu cihazda (localStorage) durur; görseller ve hata mesajları kaydedilmez.
+// C++ benzetmesi: her mod için bir std::vector<Chat>, en yenisi başta.
+
+interface Chat {
+  id: string;
+  title: string;
+  updatedAt: number;
+  msgs: Msg[];
+}
+const CHATS_KEY = "gazzla.aiChats";
+const MAX_CHATS = 20;
+
+function newChat(): Chat {
+  return { id: crypto.randomUUID(), title: "", updatedAt: Date.now(), msgs: [] };
+}
+
+function loadChats(): Record<Mode, Chat[]> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CHATS_KEY) ?? "{}");
+    return { coach: Array.isArray(raw.coach) ? raw.coach : [], study: Array.isArray(raw.study) ? raw.study : [] };
+  } catch {
+    return { coach: [], study: [] };
+  }
+}
+
+const chats: Record<Mode, Chat[]> = loadChats();
+const current: Record<Mode, Chat> = { coach: newChat(), study: newChat() };
+const hist = () => current[mode].msgs;
+let historyOpen = false;
+
+/** Şu anki sohbeti geçmişe yazar (görselsiz, hatasız). */
+function saveChat(m: Mode): void {
+  const c = current[m];
+  const msgs: Msg[] = c.msgs
+    .filter((x) => !x.error && (x.content || x.proposal || x.session))
+    .map(({ image, note: _note, ...rest }) => (image ? { ...rest, content: `${rest.content}\n[görsel]` } : rest));
+  if (!msgs.length) return;
+  const first = msgs.find((x) => x.role === "user");
+  const entry: Chat = { id: c.id, title: (first?.content ?? "Sohbet").replace(/\s+/g, " ").slice(0, 60), updatedAt: Date.now(), msgs };
+  chats[m] = [entry, ...chats[m].filter((x) => x.id !== c.id)].slice(0, MAX_CHATS);
+  try {
+    localStorage.setItem(CHATS_KEY, JSON.stringify(chats));
+  } catch {
+    // Depo doluysa eski sohbetleri at ve yeniden dene.
+    chats[m] = chats[m].slice(0, 5);
+    try {
+      localStorage.setItem(CHATS_KEY, JSON.stringify(chats));
+    } catch {
+      /* kaydedilemedi; sohbet yine de ekranda */
+    }
+  }
+}
+
+function deleteChat(m: Mode, id: string): void {
+  chats[m] = chats[m].filter((x) => x.id !== id);
+  try {
+    localStorage.setItem(CHATS_KEY, JSON.stringify(chats));
+  } catch {
+    /* sorun değil */
+  }
+}
+
+/** Bu kadar mesajdan sonra "yeni sohbete geç" önerisi çıkar (her soruda bütün sohbet yeniden gönderiliyor). */
+const NUDGE_AT: Record<Mode, number> = { coach: 8, study: 6 };
 let busy = false;
 let pendingImage: string | undefined; // ders asistanı: bir sonraki mesajla gidecek fotoğraf
 let matsOpen = true; // materyal listesi açık mı
@@ -358,12 +428,83 @@ function proposalSummary(p: Proposal): string {
 
 // ---------- Çizim ----------
 
+// ---------- LaTeX → okunur yazı ----------
+// Modeller "LaTeX kullanma" talimatına her zaman uymuyor (\(x^{3}\), \frac{a}{b}...). Ayrı bir kütüphane
+// (KaTeX) eklemek yerine en sık kalıpları Unicode'a çeviriyoruz: x^{3} → x³, x_{n} → xₙ, \frac{a}{b} → (a)/(b).
+
+const SUP: Record<string, string> = {
+  "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹",
+  "+": "⁺", "-": "⁻", "=": "⁼", "(": "⁽", ")": "⁾", n: "ⁿ", i: "ⁱ", x: "ˣ", k: "ᵏ", T: "ᵀ", "*": "*", "'": "′",
+};
+const SUB: Record<string, string> = {
+  "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉",
+  "+": "₊", "-": "₋", "=": "₌", "(": "₍", ")": "₎", a: "ₐ", e: "ₑ", o: "ₒ", x: "ₓ", i: "ᵢ", j: "ⱼ", n: "ₙ", m: "ₘ", k: "ₖ",
+};
+const SYM: Record<string, string> = {
+  cdot: "·", times: "×", div: "÷", leq: "≤", le: "≤", geq: "≥", ge: "≥", neq: "≠", ne: "≠", approx: "≈",
+  infty: "∞", to: "→", rightarrow: "→", leftarrow: "←", Rightarrow: "⇒", implies: "⇒", Leftrightarrow: "⇔",
+  iff: "⇔", mapsto: "↦", in: "∈", notin: "∉", subseteq: "⊆", subset: "⊂", cup: "∪", cap: "∩", emptyset: "∅",
+  forall: "∀", exists: "∃", partial: "∂", nabla: "∇", sum: "∑", prod: "∏", int: "∫", oint: "∮", pm: "±",
+  mp: "∓", alpha: "α", beta: "β", gamma: "γ", delta: "δ", Delta: "Δ", epsilon: "ε", varepsilon: "ε",
+  zeta: "ζ", eta: "η", theta: "θ", vartheta: "ϑ", kappa: "κ", lambda: "λ", Lambda: "Λ", mu: "μ", nu: "ν",
+  xi: "ξ", pi: "π", Pi: "Π", rho: "ρ", sigma: "σ", Sigma: "Σ", tau: "τ", phi: "φ", varphi: "φ", Phi: "Φ",
+  chi: "χ", psi: "ψ", Psi: "Ψ", omega: "ω", Omega: "Ω", Gamma: "Γ", Theta: "Θ", ldots: "…", dots: "…",
+  cdots: "⋯", circ: "∘", langle: "⟨", rangle: "⟩", lvert: "|", rvert: "|", mid: "|", vert: "|", equiv: "≡",
+  sim: "∼", propto: "∝", perp: "⊥", parallel: "∥", angle: "∠", deg: "°", neg: "¬", land: "∧", lor: "∨",
+  quad: " ", qquad: "  ", lim: "lim", sin: "sin", cos: "cos", tan: "tan", log: "log", ln: "ln", exp: "exp",
+  det: "det", max: "max", min: "min", sup: "sup", inf: "inf", ker: "ker", dim: "dim",
+};
+const BB: Record<string, string> = { R: "ℝ", N: "ℕ", Z: "ℤ", Q: "ℚ", C: "ℂ" };
+
+const script = (map: Record<string, string>, mark: string) => (s: string) =>
+  [...s].every((c) => map[c]) ? [...s].map((c) => map[c]).join("") : `${mark}(${s})`;
+const toSup = script(SUP, "^");
+const toSub = script(SUB, "_");
+
+function latexToText(t: string): string {
+  if (!/\\[a-zA-Z()[\]]|\$|\^\{|_\{/.test(t)) return t;
+  let s = t
+    .replace(/\$\$([\s\S]+?)\$\$/g, "$1")
+    .replace(/\$([^$\n]*[\\^_=][^$\n]*)\$/g, "$1") // tek $: yalnız içinde formül işareti varsa (5$ gibi fiyatlar kalsın)
+    .replace(/\\\[|\\\]|\\\(|\\\)/g, "")
+    .replace(/\\begin\{[a-z*]+\}(\{[^}]*\})?|\\end\{[a-z*]+\}/g, "")
+    .replace(/\\(?:left|right|big|Big|bigg|Bigg|displaystyle|limits)\b/g, "")
+    .replace(/\\mathbb\{([RNZQC])\}/g, (_, c: string) => BB[c])
+    // Önce en içtekiler: üs ve alt indis. Sonra (birkaç turda) onları saran kalıplar.
+    .replace(/\^\{([^{}]*)\}/g, (_, x: string) => toSup(x))
+    .replace(/_\{([^{}]*)\}/g, (_, x: string) => toSub(x));
+  for (let i = 0; i < 3; i++)
+    s = s
+      .replace(/\\(?:text|mathrm|mathbf|mathit|operatorname|textbf|textit|mathcal)\{([^{}]*)\}/g, "$1")
+      .replace(/\\sqrt\{([^{}]*)\}/g, "√($1)")
+      .replace(/\\boxed\{([^{}]*)\}/g, "**$1**")
+      .replace(/\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}/g, (_, a: string, b: string) => {
+        const wrap = (x: string) => (/^[\w.²³⁰-⁹]+$/u.test(x) ? x : `(${x})`);
+        return `${wrap(a)}/${wrap(b)}`;
+      });
+  return s
+    .replace(/\^([0-9a-zA-Z+\-'*])/g, (_, x: string) => toSup(x))
+    .replace(/_([0-9a-z])(?![a-z])/g, (_, x: string) => toSub(x))
+    .replace(/\\([a-zA-Z]+)/g, (m, name: string) => SYM[name] ?? m)
+    .replace(/\\[,;:! ]/g, " ")
+    .replace(/\\\\/g, "\n")
+    .replace(/&(?=\s*[=≤≥<>≈→])/g, "")
+    .replace(/^\s*-{3,}\s*$/gm, "")
+    .replace(/[ \t]{2,}/g, " ");
+}
+
 /**
- * Asistan cevabını güvenli HTML'e çevirir: önce kaçış (escape), sonra biraz Markdown:
+ * Asistan cevabını güvenli HTML'e çevirir: önce LaTeX'i sadeleştir, sonra kaçış (escape), sonra biraz Markdown:
  * başlıklar kalın satır, "- " maddeler "• ", **kalın**, `kod`, satır sonları.
  */
 function formatText(text: string): string {
-  return escapeHtml(text)
+  const plain = latexToText(text)
+    // Markdown tablosu: ayraç satırını at, her satırı "a · b · c" yap (tablo istemiyoruz ama bazen geliyor).
+    .replace(/^[ \t]*\|[ \t:|-]+\|[ \t]*$/gm, "")
+    .replace(/^[ \t]*\|(.+)\|[ \t]*$/gm, (_, row: string) => row.split("|").map((c) => c.trim()).filter(Boolean).join(" · "))
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return escapeHtml(plain)
     .replace(/^#{1,6}\s+(.+)$/gm, "<b>$1</b>")
     .replace(/^(\s*)[-*]\s+/gm, "$1• ")
     .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
@@ -433,6 +574,35 @@ function messagesHtml(): string {
 
 // ---------- Materyal paneli (yalnız ders asistanı) ----------
 
+const openFolders = new Set<string>(); // panelde açık klasör grupları
+const reading = new Map<string, string>(); // Groq yolu: okunmakta olan materyal → "3/40"
+const KIND_OF = (m: Material) => (m.mimeType === "application/pdf" ? "PDF" : m.mimeType.startsWith("image/") ? "IMG" : "TXT");
+const studyProvider = () => statusNow()?.study ?? "files";
+
+function stateText(m: Material): string {
+  if (studyProvider() === "excerpts") {
+    const r = reading.get(m.id);
+    if (r) return `okunuyor ${r}`;
+    return m.pages?.length ? "hazır" : "";
+  }
+  if (isUploading(m.id)) return "hazırlanıyor...";
+  return m.remote && m.remote.expiresAt > Date.now() ? "hazır" : "";
+}
+
+function matRowHtml(m: Material, nested = false): string {
+  const state = stateText(m);
+  return `
+    <li class="ai-mat ${m.active ? "" : "off"} ${nested ? "nested" : ""}">
+      <label>
+        <input type="checkbox" data-mat-active="${m.id}" ${m.active ? "checked" : ""} />
+        <span class="ai-mat-kind">${KIND_OF(m)}</span>
+        <span class="ai-mat-name" title="${escapeHtml(m.name)}">${escapeHtml(m.name)}</span>
+      </label>
+      <span class="muted ai-mat-meta">${sizeText(m.size)}${state ? ` · ${state}` : ""}</span>
+      <button type="button" class="icon ai-mat-del" data-mat-del="${m.id}" title="Sil" aria-label="${escapeHtml(m.name)} sil">×</button>
+    </li>`;
+}
+
 function matsHtml(): string {
   const mats = materialsNow();
   if (!mats) {
@@ -448,36 +618,47 @@ function matsHtml(): string {
         <span class="muted">${mats.length ? `${active}/${mats.length} işaretli` : "henüz yok"}</span>
         <span class="ai-caret ${matsOpen ? "open" : ""}">▾</span>
       </button>
-      <label class="small ghost ai-mats-add">+ Ekle<input type="file" id="ai-mat-file" accept="${ACCEPT}" multiple hidden /></label>
+      <span class="ai-mats-btns">
+        <label class="small ghost ai-mats-add">+ Dosya<input type="file" id="ai-mat-file" accept="${ACCEPT}" multiple hidden /></label>
+        <label class="small ghost ai-mats-add">+ Klasör<input type="file" id="ai-mat-folder" webkitdirectory multiple hidden /></label>
+      </span>
     </div>`;
   if (!matsOpen) return head;
-  const rows = mats
-    .map((m) => {
-      const kind = m.mimeType === "application/pdf" ? "PDF" : m.mimeType.startsWith("image/") ? "IMG" : "TXT";
-      const state = isUploading(m.id)
-        ? "hazırlanıyor..."
-        : m.remote && m.remote.expiresAt > Date.now()
-          ? "hazır"
-          : "";
+
+  // Klasörden gelenleri grupla; tek tek eklenenler ayrı satır.
+  const groups = new Map<string, Material[]>();
+  const singles: Material[] = [];
+  for (const m of mats) {
+    if (m.folder) groups.set(m.folder, [...(groups.get(m.folder) ?? []), m]);
+    else singles.push(m);
+  }
+  const folderRows = [...groups.entries()]
+    .map(([name, list]) => {
+      const on = list.filter((m) => m.active).length;
+      const open = openFolders.has(name);
       return `
-        <li class="ai-mat ${m.active ? "" : "off"}">
+        <li class="ai-mat ai-folder ${on ? "" : "off"}">
           <label>
-            <input type="checkbox" data-mat-active="${m.id}" ${m.active ? "checked" : ""} />
-            <span class="ai-mat-kind">${kind}</span>
-            <span class="ai-mat-name" title="${escapeHtml(m.name)}">${escapeHtml(m.name)}</span>
+            <input type="checkbox" data-folder-active="${escapeHtml(name)}" ${on === list.length ? "checked" : ""} />
+            <span class="ai-mat-kind">KLS</span>
+            <span class="ai-mat-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
           </label>
-          <span class="muted ai-mat-meta">${sizeText(m.size)}${state ? ` · ${state}` : ""}</span>
-          <button type="button" class="icon ai-mat-del" data-mat-del="${m.id}" title="Sil" aria-label="${escapeHtml(m.name)} sil">×</button>
-        </li>`;
+          <span class="muted ai-mat-meta">${list.length} dosya · ${on} işaretli</span>
+          <button type="button" class="icon ai-mat-del" data-folder-open="${escapeHtml(name)}" aria-expanded="${open}"
+            title="${open ? "Kapat" : "Dosyaları göster"}">${open ? "▴" : "▾"}</button>
+          <button type="button" class="icon ai-mat-del" data-folder-del="${escapeHtml(name)}" title="Klasörü sil" aria-label="${escapeHtml(name)} klasörünü sil">×</button>
+        </li>
+        ${open ? list.map((m) => matRowHtml(m, true)).join("") : ""}`;
     })
     .join("");
+  const rows = folderRows + singles.map((m) => matRowHtml(m)).join("");
   return `
     ${head}
     ${
       mats.length
         ? `<ul class="ai-mat-list">${rows}</ul>
-           <p class="muted small-note">İşaretli materyaller her soruda okunur. Sadece o anki derse ait olanları işaretli tut, cevap hızlı gelsin.</p>`
-        : `<p class="muted small-note">PDF (ders notu, kitap, eski sınav), metin ya da fotoğraf ekle. Dosyalar bu cihazda kalır.</p>`
+           <p class="muted small-note">İşaretli materyaller her soruda okunur. Sadece o anki derse ait olanları işaretli tut, cevap hızlı gelsin ve hakkın geç dolsun.</p>`
+        : `<p class="muted small-note">PDF (ders notu, kitap, eski sınav), metin ya da fotoğraf ekle; bir klasörün tamamını da buraya sürükleyip bırakabilirsin. Drive'daki bir klasör için: Drive'da klasöre sağ tık → İndir, zip'i aç, klasörü buraya bırak. Dosyalar bu cihazda kalır.</p>`
     }`;
 }
 
@@ -486,19 +667,73 @@ function refreshMats(): void {
   if (el) el.innerHTML = matsHtml();
 }
 
-async function addFiles(files: FileList | File[]): Promise<void> {
-  for (const file of Array.from(files)) {
-    if (file.size > MAX_SIZE) {
-      toast(`${file.name} çok büyük (en fazla 50 MB).`);
+const SUPPORTED = /\.(pdf|txt|md|csv|png|jpe?g|webp|heic|heif)$/i;
+
+// Groq yolunda dosyaları sırayla oku (aynı anda hepsini okumak dakikalık sınırı doldurur).
+let readQueue: Promise<void> = Promise.resolve();
+function queueRead(m: Material): void {
+  readQueue = readQueue.then(async () => {
+    try {
+      await extractPages(m, (d, t) => {
+        reading.set(m.id, `${d}/${t}`);
+        refreshMats();
+      });
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "";
+      toast(code === "ocr-daily-limit" ? "Bugünkü sayfa okuma hakkın doldu; kalan sayfalar yarın okunur." : `${m.name} okunamadı.`);
+    } finally {
+      reading.delete(m.id);
+      refreshMats();
+    }
+  });
+}
+
+/** Dosyaları materyal olarak ekler. folderOf: dosyanın hangi klasörden geldiği (yoksa tek dosya). */
+async function addFiles(files: File[], folderOf: (f: File) => string | undefined = () => undefined): Promise<void> {
+  let skipped = 0;
+  let added = 0;
+  for (const file of files) {
+    if (!SUPPORTED.test(file.name) || file.size > MAX_SIZE) {
+      skipped++;
       continue;
     }
-    const m = await addMaterial(file);
-    refreshMats();
-    ensureUploaded(m)
-      .catch((err) => toast(ERRORS[err instanceof Error ? err.message : ""] ?? `${file.name} hazırlanamadı. Soru sorunca yeniden denerim.`))
-      .finally(refreshMats);
-    refreshMats(); // "hazırlanıyor..." görünsün
+    const m = await addMaterial(file, folderOf(file));
+    added++;
+    if (studyProvider() === "excerpts") queueRead(m);
+    else
+      ensureUploaded(m)
+        .catch(() => {
+          /* soru sorulunca yeniden denenir */
+        })
+        .finally(refreshMats);
   }
+  refreshMats();
+  if (added > 1) toast(`${added} materyal eklendi.`);
+  if (skipped) toast(`${skipped} dosya atlandı (desteklenmeyen tür ya da 50 MB'tan büyük).`);
+}
+
+/** Sürükle-bırak: klasörleri (alt klasörler dahil) gezip dosyaları toplar. */
+async function filesFromDrop(dt: DataTransfer): Promise<{ file: File; folder?: string }[]> {
+  const entries = [...dt.items]
+    .map((i) => (i.kind === "file" ? i.webkitGetAsEntry?.() : null))
+    .filter((e): e is FileSystemEntry => Boolean(e));
+  if (!entries.length) return [...dt.files].map((file) => ({ file }));
+  const out: { file: File; folder?: string }[] = [];
+  const walk = async (entry: FileSystemEntry, top?: string): Promise<void> => {
+    if (entry.isFile) {
+      const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej));
+      out.push({ file, folder: top });
+    } else if (entry.isDirectory) {
+      const reader = (entry as FileSystemDirectoryEntry).createReader();
+      for (;;) {
+        const batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej));
+        if (!batch.length) break;
+        for (const e of batch) await walk(e, top ?? entry.name);
+      }
+    }
+  };
+  for (const e of entries) await walk(e);
+  return out;
 }
 
 /** Sohbete eklenecek fotoğrafın küçük önizlemesi (gönder deyince mesajla gider). */
@@ -529,9 +764,94 @@ const STOP_ICON = svg('<rect x="7" y="7" width="10" height="10" rx="2" fill="cur
 const SPEAKER_ICON = svg('<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>');
 const BOLT_ICON = svg('<path d="M13 3 5 13.5h6L10.5 21 19 10h-6z"/>');
 const BOOK_ICON = svg('<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/>');
+const HISTORY_ICON = svg('<path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/><path d="M12 8v4l3 2"/>');
+const PLUS_ICON = svg('<path d="M12 5v14M5 12h14"/>');
 const CLIP_ICON = svg('<path d="m20 11.5-7.8 7.8a5 5 0 0 1-7-7L13 4.5a3.4 3.4 0 0 1 4.8 4.8l-7.7 7.7a1.7 1.7 0 0 1-2.4-2.4l7-7"/>');
 
+const NOTICE_KEY = "gazzla.aiNotice";
+
+/** Bugün kalan hak ("Bugün 23 soru hakkın var"). Yerelde (sınırsız) boş. */
+function leftText(): string {
+  const st = statusNow();
+  if (!st || import.meta.env.DEV) return "";
+  const n = mode === "coach" ? st.left.coach : st.left.study;
+  return n > 0 ? `Bugün ${n} soru hakkın var` : "Bugünkü hakkın doldu";
+}
+
+function refreshLeft(): void {
+  const el = document.querySelector<HTMLElement>("#ai-left");
+  if (el) el.textContent = leftText();
+}
+
+function historyHtml(): string {
+  const list = chats[mode];
+  if (!list.length) return `<div class="ai-history"><p class="muted small-note">Henüz kayıtlı sohbet yok. Sohbetler sadece bu cihazda saklanır.</p></div>`;
+  return `
+    <div class="ai-history">
+      <ul>
+        ${list
+          .map(
+            (c) => `
+          <li class="${c.id === current[mode].id ? "on" : ""}">
+            <button type="button" class="ai-history-open" data-chat-open="${c.id}">
+              <span class="ai-history-title">${escapeHtml(c.title || "Sohbet")}</span>
+              <span class="muted">${new Date(c.updatedAt).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })} · ${c.msgs.length} mesaj</span>
+            </button>
+            <button type="button" class="icon ai-mat-del" data-chat-del="${c.id}" title="Sil" aria-label="Sohbeti sil">×</button>
+          </li>`,
+          )
+          .join("")}
+      </ul>
+    </div>`;
+}
+
+function nudgeHtml(): string {
+  if (busy || hist().length < NUDGE_AT[mode]) return "";
+  return `
+    <div class="ai-nudge">
+      <span>Bu sohbet uzadı. Her soruda bütün sohbet yeniden gönderiliyor; yeni bir sohbete geçersen cevaplar hızlanır ve hakkın daha geç dolar.</span>
+      <button type="button" class="small primary" data-new-chat>Yeni sohbet</button>
+    </div>`;
+}
+
+function noticeHtml(): string {
+  let seen = false;
+  try {
+    seen = localStorage.getItem(NOTICE_KEY) === "1";
+  } catch {
+    /* gizli pencere */
+  }
+  if (seen) return "";
+  return `
+    <div class="ai-notice" id="ai-notice">
+      <span>Ders asistanına eklediğin materyaller, fotoğraflar ve sorular cevap üretilebilmesi için yapay zeka servisine gönderilir.
+      Bulunduğun ülkeye göre bu içerik servis sağlayıcının ürünlerini geliştirmek için kullanılabilir; kişisel ya da hassas belge ekleme.
+      <a href="/gizlilik.html" target="_blank" rel="noopener">Gizlilik</a></span>
+      <button type="button" class="small ghost" id="ai-notice-ok">Anladım</button>
+    </div>`;
+}
+
+/** Yeni boş sohbet aç (eskisi geçmişte kalır). */
+function startNewChat(): void {
+  stopSpeaking();
+  saveChat(mode);
+  current[mode] = newChat();
+  pendingImage = undefined;
+}
+
 export function renderAssistant(ctx: AssistantCtx): void {
+  // Canlıda giriş şart: günlük hak hesaba bağlı.
+  if (!import.meta.env.DEV && !ctx.signedIn()) {
+    ctx.app.innerHTML = `
+      ${ctx.headerHtml()}
+      ${ctx.pageHeadHtml("Yapay zeka asistanı", `<span class="grad-text">Gazzla AI</span>`, "Plan, program, ders. Sor, gazlasın.")}
+      <section class="card ai-login">
+        <p>Gazzla AI'yı kullanmak için giriş yap. Hesap ücretsiz; her hesabın her gün kendi soru hakkı var.</p>
+        <button class="primary" id="ai-login">Giriş yap / hesap aç</button>
+      </section>`;
+    ctx.app.querySelector("#ai-login")!.addEventListener("click", () => ctx.openAccount());
+    return;
+  }
   const study = mode === "study";
   const locked = busy || recState !== "idle";
   const modeBtn = (m: Mode, icon: string, label: string, note: string) => `
@@ -554,14 +874,25 @@ export function renderAssistant(ctx: AssistantCtx): void {
         ${modeBtn("study", BOOK_ICON, "Ders asistanı", "Materyallerin, sorular, sınavlar")}
       </div>
       ${study ? `<div id="ai-mats" class="ai-mats">${matsHtml()}</div>` : ""}
+      ${study ? noticeHtml() : ""}
       <div class="ai-top">
         <button id="ai-voice" class="small ghost ai-voice ${voiceMode ? "on" : ""}" aria-pressed="${voiceMode}"
           title="Açıkken cevapları sesli okur ve okuyunca seni yeniden dinler">
-          <span class="ico">${SPEAKER_ICON}</span> Sesli sohbet: ${voiceMode ? "açık" : "kapalı"}
+          <span class="ico">${SPEAKER_ICON}</span> Sesli: ${voiceMode ? "açık" : "kapalı"}
         </button>
-        ${hist().length ? `<button class="small ghost" id="ai-clear" ${busy ? "disabled" : ""}>Sohbeti temizle</button>` : ""}
+        <span class="muted ai-left" id="ai-left">${leftText()}</span>
+        <span class="ai-top-btns">
+          <button class="small ghost ai-voice" id="ai-history-btn" aria-expanded="${historyOpen}" title="Geçmiş sohbetler">
+            <span class="ico">${HISTORY_ICON}</span> Geçmiş${chats[mode].length ? ` (${chats[mode].length})` : ""}
+          </button>
+          <button class="small ghost ai-voice" id="ai-new" ${busy || !hist().length ? "disabled" : ""} title="Yeni sohbet">
+            <span class="ico">${PLUS_ICON}</span> Yeni
+          </button>
+        </span>
       </div>
+      ${historyOpen ? historyHtml() : ""}
       <div id="ai-messages" class="ai-messages">${messagesHtml()}</div>
+      ${nudgeHtml()}
       ${study ? `<div id="ai-chip-wrap">${chipHtml()}</div>` : ""}
       <form id="ai-form" class="ai-form">
         <button type="button" id="ai-mic" class="ai-mic" aria-label="Sesle yaz">${MIC_ICON}</button>
@@ -614,11 +945,50 @@ export function renderAssistant(ctx: AssistantCtx): void {
       ctx.rerender();
     }),
   );
-  ctx.app.querySelector("#ai-clear")?.addEventListener("click", () => {
-    stopSpeaking();
-    hist().length = 0;
-    pendingImage = undefined;
+  ctx.app.querySelector("#ai-new")?.addEventListener("click", () => {
+    if (busy) return;
+    startNewChat();
+    historyOpen = false;
     ctx.rerender();
+  });
+  ctx.app.querySelector("[data-new-chat]")?.addEventListener("click", () => {
+    if (busy) return;
+    startNewChat();
+    ctx.rerender();
+  });
+  ctx.app.querySelector("#ai-history-btn")?.addEventListener("click", () => {
+    historyOpen = !historyOpen;
+    ctx.rerender();
+  });
+  ctx.app.querySelector(".ai-history")?.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button");
+    if (!btn || busy) return;
+    if (btn.dataset.chatOpen) {
+      const c = chats[mode].find((x) => x.id === btn.dataset.chatOpen);
+      if (!c) return;
+      stopSpeaking();
+      saveChat(mode);
+      current[mode] = { ...c, msgs: c.msgs.map((x) => ({ ...x })) };
+      historyOpen = false;
+      ctx.rerender();
+    } else if (btn.dataset.chatDel) {
+      deleteChat(mode, btn.dataset.chatDel);
+      if (current[mode].id === btn.dataset.chatDel) current[mode] = newChat();
+      ctx.rerender();
+    }
+  });
+  ctx.app.querySelector("#ai-notice-ok")?.addEventListener("click", () => {
+    try {
+      localStorage.setItem(NOTICE_KEY, "1");
+    } catch {
+      /* sorun değil */
+    }
+    ctx.app.querySelector("#ai-notice")?.remove();
+  });
+  // Kalan hakkı ve ders asistanının yolunu (ülkeye göre) sunucudan öğren.
+  loadStatus().then(() => {
+    refreshLeft();
+    if (study) refreshMats();
   });
   ctx.app.querySelector("#ai-mic")!.addEventListener("click", () => {
     if (recState === "rec") stopRec(false);
@@ -641,11 +1011,34 @@ export function renderAssistant(ctx: AssistantCtx): void {
     mats.addEventListener("change", (e) => {
       const t = e.target as HTMLInputElement;
       if (t.id === "ai-mat-file" && t.files?.length) {
-        addFiles(t.files);
+        addFiles([...t.files]);
+        t.value = "";
+      } else if (t.id === "ai-mat-folder" && t.files?.length) {
+        // Klasör seçici: her dosyanın yolu "Klasör/alt/dosya.pdf" gibi; ilk parça klasörün adı.
+        addFiles([...t.files], (f) => f.webkitRelativePath.split("/")[0] || undefined);
         t.value = "";
       } else if (t.dataset.matActive) {
         setActive(t.dataset.matActive, t.checked).then(refreshMats);
+      } else if (t.dataset.folderActive) {
+        setFolderActive(t.dataset.folderActive, t.checked).then(refreshMats);
       }
+    });
+    // Klasörü ya da dosyaları panele sürükleyip bırakma.
+    mats.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      mats.classList.add("drag");
+    });
+    mats.addEventListener("dragleave", () => mats.classList.remove("drag"));
+    mats.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      mats.classList.remove("drag");
+      if (!e.dataTransfer) return;
+      const found = await filesFromDrop(e.dataTransfer);
+      const folderOf = new Map(found.map((x) => [x.file, x.folder]));
+      addFiles(
+        found.map((x) => x.file),
+        (f) => folderOf.get(f),
+      );
     });
     mats.addEventListener("click", (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button");
@@ -653,6 +1046,16 @@ export function renderAssistant(ctx: AssistantCtx): void {
       if (btn.dataset.matsToggle !== undefined) {
         matsOpen = !matsOpen;
         refreshMats();
+      } else if (btn.dataset.folderOpen) {
+        const f = btn.dataset.folderOpen;
+        if (openFolders.has(f)) openFolders.delete(f);
+        else openFolders.add(f);
+        refreshMats();
+      } else if (btn.dataset.folderDel) {
+        const f = btn.dataset.folderDel;
+        const list = (materialsNow() ?? []).filter((x) => x.folder === f);
+        if (list.length && confirm(`"${f}" klasörü (${list.length} dosya) bu cihazdan silinsin mi?`))
+          Promise.all(list.map((x) => removeMaterial(x.id))).then(refreshMats);
       } else if (btn.dataset.matDel) {
         const m = materialsNow()?.find((x) => x.id === btn.dataset.matDel);
         if (m && confirm(`"${m.name}" bu cihazdan silinsin mi?`)) removeMaterial(m.id).then(refreshMats);
@@ -726,9 +1129,10 @@ function updateLast(h: Msg[]): void {
 // ---------- Gönderme ----------
 
 const ERRORS: Record<string, string> = {
-  "no-key": "Asistan henüz kurulmamış: .env.local dosyasına anahtar eklenip npm run dev yeniden başlatılmalı.",
-  "no-study-key":
-    "Ders asistanı henüz kurulmamış: .env.local dosyasındaki GEMINI_API_KEY satırına anahtar eklenip npm run dev yeniden başlatılmalı.",
+  "not-configured": "Gazzla AI henüz kurulmamış (sunucuda anahtar yok).",
+  "not-signed-in": "Gazzla AI için giriş yapman gerekiyor.",
+  "daily-limit": "Bugünkü soru hakkın doldu. Hakların her gece yenilenir; yarın görüşürüz!",
+  "wrong-region": "Bu işlem bulunduğun ülkede kullanılamıyor.",
   "rate-limit": "Biraz fazla hızlı gittik. Bir dakika sonra tekrar dene.",
   "study-rate-limit": "Ders asistanının kullanım sınırı doldu. Biraz bekle; günlük sınır dolduysa yarın yenilenir.",
   "too-big": "Dosya çok büyük.",
@@ -738,6 +1142,7 @@ const ERRORS: Record<string, string> = {
 /** Hata cevabındaki kodu okuyup kullanıcıya gösterilecek cümleyi döndürür. */
 async function errorText(res: Response, study: boolean): Promise<string> {
   const code = await res.json().then((j) => j.error as string).catch(() => "");
+  if (code === "daily-limit") loadStatus(true).then(refreshLeft);
   const key = study && code === "rate-limit" ? "study-rate-limit" : code;
   return ERRORS[key] ?? "Gazzla AI'ya şu an ulaşılamıyor. Biraz sonra tekrar dene.";
 }
@@ -754,20 +1159,18 @@ function coachRequest(ctx: AssistantCtx, h: Msg[], answer: Msg): Promise<Respons
         content: withToolNotes(m),
       })),
   ];
-  return fetch("/api/ai", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, tools: TOOLS }),
-  });
+  return aiFetch("coach", JSON.stringify({ messages, tools: TOOLS }));
 }
 
-function studySystemPrompt(names: string[]): string {
+function studySystemPrompt(names: string[], viaExcerpts = false): string {
   return [
     "Sen Gazzla Ders Asistanısın: Gazzla adlı çalışma uygulamasının ders çalışma asistanı. Kullanıcı üniversite öğrencisi (ETH Zürih).",
     "Görevin: anlamadığı yeri açık ve sade anlatmak, sınav ve alıştırma sorularını adım adım çözmek, özet çıkarmak,",
     "istenirse ona soru sorup cevabını değerlendirmek. Öğretmen gibi ol: önce sezgi, sonra ayrıntı; gerekirse küçük bir örnek.",
     names.length
-      ? `Kullanıcının yüklediği materyaller son mesaja ekli, sırasıyla: ${names.map((n, i) => `${i + 1}) ${n}`).join(", ")}.`
+      ? viaExcerpts
+        ? `Kullanıcının materyalleri: ${names.join(", ")}. Bu mesajın sonunda bu materyallerden soruyla ilgili alıntılar var ([dosya, s. N] etiketleriyle); alıntılarda yoksa bunu söyle.`
+        : `Kullanıcının yüklediği materyaller son mesaja ekli, sırasıyla: ${names.map((n, i) => `${i + 1}) ${n}`).join(", ")}.`
       : "Şu an ekli materyal yok; genel bilginle cevap ver, gerekirse materyal eklemesini öner.",
     "Materyale dayanıyorsan kaynağı kısaca belirt (dosya adı, sayfa ya da soru numarası). Materyalde yoksa bunu söyle, sonra genel bilginle cevapla.",
     "Kullanıcıyla Türkçe konuş. Materyal Almanca ya da İngilizce olabilir; önemli terimlerin orijinalini parantezde ver.",
@@ -785,9 +1188,16 @@ function studySystemPrompt(names: string[]): string {
   ].join("\n");
 }
 
-/** Ders asistanı: işaretli materyalleri (gerekirse) yükleyip Gemini aracısına sohbet gönderir. */
+/**
+ * Ders asistanı. Sunucu ülkeye göre yolu seçer:
+ *   - Gemini: işaretli materyaller (gerekirse) yüklenir, soruya dosya olarak eklenir.
+ *   - Groq: materyallerin yazısı tarayıcıda çıkarılır, soruyla ilgili alıntılar gönderilir.
+ */
 async function studyRequest(ctx: AssistantCtx, h: Msg[], answer: Msg): Promise<Response> {
   const mats = (await loadMaterials()).filter((m) => m.active);
+  const st = await loadStatus();
+  if (st?.study === "excerpts") return studyRequestGroq(h, answer, mats);
+  void ctx;
   const post = async (force: boolean) => {
     if (mats.length) {
       answer.note = "materyaller okunuyor...";
@@ -806,16 +1216,51 @@ async function studyRequest(ctx: AssistantCtx, h: Msg[], answer: Msg): Promise<R
         files: last ? files : undefined,
       };
     });
-    return fetch("/api/study", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ system: studySystemPrompt(mats.map((m) => m.name)), messages, tools: TOOLS }),
-    });
+    return aiFetch("study", JSON.stringify({ system: studySystemPrompt(mats.map((m) => m.name)), messages, tools: TOOLS }));
   };
   let res = await post(false);
   // Serviste dosyanın süresi dolmuşsa bir kez yeniden yükleyip dene.
   if (res.status === 410 && mats.length) res = await post(true);
   return res;
+}
+
+async function studyRequestGroq(h: Msg[], answer: Msg, mats: Material[]): Promise<Response> {
+  const extracted: { name: string; pages: string[] }[] = [];
+  for (const [i, m] of mats.entries()) {
+    answer.note = `materyaller okunuyor (${i + 1}/${mats.length})...`;
+    updateLast(h);
+    try {
+      const pages = await extractPages(m, (d, t) => {
+        answer.note = `"${m.name}" okunuyor ${d}/${t}...`;
+        reading.set(m.id, `${d}/${t}`);
+        updateLast(h);
+        refreshMats();
+      });
+      extracted.push({ name: m.name, pages });
+    } catch {
+      toast(`${m.name} okunamadı; o olmadan cevaplıyorum.`);
+    } finally {
+      reading.delete(m.id);
+      refreshMats();
+    }
+  }
+  answer.note = mats.length ? "cevap hazırlanıyor..." : undefined;
+  updateLast(h);
+  const question = [...h].reverse().find((x) => x.role === "user")?.content ?? "";
+  const context = pickContext(extracted, question, 7000); // dakikalık sınır küçük: ~2.000 kelimelik alıntı
+  const past = h.filter((m) => m !== answer && !m.error).slice(-8);
+  const messages = past.map((m, i) => {
+    const last = i === past.length - 1;
+    return {
+      role: m.role,
+      text: m.image && !last ? `${withToolNotes(m)}\n[Burada bir görsel vardı]` : withToolNotes(m),
+      image: last ? m.image : undefined,
+    };
+  });
+  return aiFetch(
+    "study",
+    JSON.stringify({ system: studySystemPrompt(extracted.map((x) => x.name), true), context, messages, tools: TOOLS }),
+  );
 }
 
 async function send(ctx: AssistantCtx, text: string): Promise<void> {
@@ -825,7 +1270,7 @@ async function send(ctx: AssistantCtx, text: string): Promise<void> {
   busy = true;
   stopSpeaking();
   const m = mode;
-  const h = histories[m];
+  const h = current[m].msgs;
   h.push({ role: "user", content: content || "Bu görseldeki soruyu çöz.", image });
   pendingImage = undefined;
   const answer: Msg = { role: "assistant", content: "" };
@@ -871,12 +1316,15 @@ async function send(ctx: AssistantCtx, text: string): Promise<void> {
       answer.content = answer.proposal.blocks.length ? "Şunları programına ekleyeyim mi?" : "";
     if (!answer.content && !answer.proposal && !answer.session) throw new Error("Boş cevap geldi. Tekrar dener misin?");
     ok = true;
+    spent(m);
+    saveChat(m);
   } catch (err) {
     answer.error = true;
     answer.note = undefined;
     answer.proposal = undefined;
-    const msg = err instanceof Error ? err.message : "";
-    answer.content = ERRORS[msg] ?? (msg || "Bir şeyler ters gitti.");
+    // TypeError = ağ hatası (internet yok, sunucuya ulaşılamadı); teknik mesajı gösterme.
+    const msg = err instanceof TypeError ? "" : err instanceof Error ? err.message : "";
+    answer.content = ERRORS[msg] ?? (msg || "Gazzla AI'ya şu an ulaşılamıyor. İnternet bağlantını kontrol edip biraz sonra tekrar dene.");
   } finally {
     busy = false;
     if (document.querySelector("#ai-messages")) ctx.rerender();
@@ -975,12 +1423,12 @@ async function startRec(ctx: AssistantCtx): Promise<void> {
     const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
     let text = "";
     try {
-      const res = await fetch("/api/transcribe", { method: "POST", headers: { "Content-Type": blob.type }, body: blob });
+      const res = await aiFetch("transcribe", blob, blob.type);
       const json = (await res.json()) as { text?: string; error?: string };
       if (!res.ok) throw new Error(ERRORS[json.error ?? ""] ?? "Ses yazıya çevrilemedi.");
       text = json.text ?? "";
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Ses yazıya çevrilemedi.");
+      toast(err instanceof Error && !(err instanceof TypeError) ? err.message : "Ses yazıya çevrilemedi.");
     }
     recState = "idle";
     updateMicUi();

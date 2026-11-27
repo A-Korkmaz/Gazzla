@@ -2843,3 +2843,143 @@ a.btn-link:hover { background: rgba(255, 255, 255, 0.1); }
   font-size: 14px;
   font-weight: 600;
 }
+
+/* Gazzla AI: kalan hak, geçmiş, uyarılar, klasörler */
+.ai-left {
+  font-size: 12px;
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+}
+
+.ai-top-btns {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.ai-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ai-history li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 12px;
+  background: var(--well);
+}
+
+.ai-history li.on {
+  outline: 1px solid rgba(129, 140, 248, 0.5);
+}
+
+.ai-history-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.ai-history-open .muted {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ai-history-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-nudge,
+.ai-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ai-nudge {
+  border: 1px solid rgba(255, 166, 0, 0.35);
+  background: rgba(255, 122, 24, 0.08);
+}
+
+.ai-notice {
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  background: var(--accent-soft);
+}
+
+.ai-nudge button,
+.ai-notice button {
+  flex: none;
+}
+
+.ai-notice a {
+  color: var(--accent);
+}
+
+.ai-login {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.ai-login p {
+  margin: 0;
+}
+
+.ai-mats.drag {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.18);
+}
+
+.ai-mats-btns {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.ai-mat.nested {
+  margin-left: 18px;
+}
+
+.ai-folder .ai-mat-kind {
+  color: var(--fire-2);
+  background: rgba(255, 166, 0, 0.12);
+}
+
+@media (max-width: 480px) {
+  .ai-left {
+    order: 3;
+    flex-basis: 100%;
+    text-align: left;
+  }
+  .ai-nudge,
+  .ai-notice {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .ai-mat-meta {
+    display: none;
+  }
+}

@@ -12,6 +12,8 @@ const url = "https://oeloqmdhffbehavolwik.supabase.co";
 const key = "sb_publishable_rbHGP0wdh0D5xxkw5_CDjA_k8OM2TzI";
 
 export const supabase = createClient(url, key);
+export const SUPABASE_URL = url;
+export const SUPABASE_KEY = key;
 
 /**
  * Sadece bağlantıyı denemek için: henüz hiç tablo yok, o yüzden olmayan bir tabloyu soruyoruz.
