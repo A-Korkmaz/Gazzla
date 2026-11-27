@@ -34,6 +34,12 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
   vurgu rengi mor-mavi (`--accent`), ana düğme turuncu. Üst çubukta emoji yerine çizgi SVG ikonlar (`ICONS`).
 - Hedefler ayrı sayfada (`view = "goals"`): günlük, haftalık ve proje hedefleri orada düzenlenir.
   Haftalık ve proje hedefleri saat olarak girilir, dakika olarak saklanır.
+- **Telefon ve bilgisayar görünümü** aynı kodla, CSS'teki `@media (min-width: 900px)` ile ayrılıyor
+  (`style.css` sonundaki bölüm; `main.ts`'te `isDesktop()` aynı sınırı kullanıyor). Bilgisayarda: sol menü hep açık
+  (`.menu.docked`), zamanlayıcı iki sütun (`.tl-main` solda, `.tl-side` sağda: hedefler, bugünün özeti,
+  "Arkadaşlar şu an"), istatistik/hedefler/arkadaşlar ızgara (`#app[data-view=...]`). Telefonda `.tl*` sarmalayıcıları
+  `display: contents` + `order` ile eski sıraya döner. Yalnız bilgisayarda görünenler `.desk-only`.
+  Boşluk tuşu zamanlayıcıda başlat/duraklat/devam.
 - Giriş **zorunlu değil**; uygulama girişsiz de çalışır.
 - Kayıtların asıl yeri cihaz (localStorage); giriş yapılmışsa arka planda Supabase'e eşitlenir.
 - **Proje adları arkadaşlardan gizli.** Arkadaşlar seans satırlarını okuyamaz; sadece `friend_totals()`
@@ -46,7 +52,8 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 
 ## Durum (son güncelleme 2026-11-27)
 - Bitti: seans eşitlemesi, arkadaşlar, proje listesi + hedeflerin eşitlenmesi (canlı sitede iki cihazla test edildi),
-  internette yayın (Netlify), giriş (tanıtım) sayfası, yeni görünüm + hedefler sayfası (2026-11-27).
+  internette yayın (Netlify), giriş (tanıtım) sayfası, yeni görünüm + hedefler sayfası (2026-11-27),
+  bilgisayar (geniş ekran) görünümü (2026-11-27).
 - Açık küçük kontrol: Supabase → Authentication → URL Configuration → **Site URL** hâlâ `http://localhost:5173`
   olabilir; `https://gazzla-08t7.netlify.app` olmalı (yoksa arkadaşların kayıt onay e-postası localhost'a gider).
 - Bulutta `__test__` ve `__test2__` adlı iki `deleted = true` test satırı var; zararsız.

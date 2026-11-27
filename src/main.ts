@@ -375,9 +375,31 @@ function ringHtml(
     </div>`;
 }
 
+/** Bilgisayarda sağ sütun: bugünün özeti (telefonda gizli; orada hedef kartı yetiyor). */
+function todaySideHtml(): string {
+  return `
+    <section class="card totals desk-only">
+      <div><span class="muted">Bugün</span><strong>${formatMinutes(Math.floor(todayWorkMinutes()))}</strong></div>
+      <div><span class="muted">Bu hafta</span><strong>${formatMinutes(Math.floor(weekWorkMinutes()))}</strong></div>
+      <div><span class="muted">Seri</span><strong>${currentStreak(settings.dailyGoalMin)} gün</strong></div>
+    </section>`;
+}
+
+/** Bilgisayarda sağ sütun: şu an aktif arkadaşlar. İçini updateTogetherLine() dolduruyor. */
+function sideFriendsHtml(): string {
+  if (!authUser) return "";
+  return `
+    <section class="card desk-only">
+      <div class="card-title">Arkadaşlar şu an</div>
+      <ul id="side-friends" class="side-friends"></ul>
+    </section>`;
+}
+
 function render(): void {
   clearInterval(hypeInterval);
   const running = phase === "work" || phase === "break";
+  // CSS bilgisayar görünümünde her sayfayı farklı diziyor (#app[data-view=...]).
+  app.dataset.view = view;
 
   if (view === "stats") {
     renderStats();
@@ -392,21 +414,31 @@ function render(): void {
   } else if (running) {
     const subtitle =
       phase === "work" ? escapeHtml(currentSubject ?? "Genel çalışma") : "Ara";
+    // .tl = iki sütunlu düzen (bilgisayarda). Telefonda sütunlar yok sayılır (display: contents),
+    // kutular CSS'teki "order" ile eski sırasına (hedef kartı en üstte) dizilir.
     app.innerHTML = `
       ${headerHtml()}
-      ${goalHtml()}
-      ${ringHtml(formatTime(timer.remainingMs), subtitle, phase as "work" | "break", timer.paused)}
-      <p id="hype" class="hype">${escapeHtml(
-        timer.paused ? "Duraklatıldı. İşini hallet, hemen dön!" : hypeMessage,
-      )}</p>
-      <p id="together" class="together"></p>
-      <div class="row">
-        ${
-          timer.paused
-            ? `<button id="resume" class="primary">Devam et ▶</button>`
-            : `<button id="pause" class="secondary">Duraklat ⏸</button>`
-        }
-        <button id="stop" class="secondary">Bitir</button>
+      <div class="tl">
+        <div class="tl-main">
+          ${ringHtml(formatTime(timer.remainingMs), subtitle, phase as "work" | "break", timer.paused)}
+          <p id="hype" class="hype">${escapeHtml(
+            timer.paused ? "Duraklatıldı. İşini hallet, hemen dön!" : hypeMessage,
+          )}</p>
+          <p id="together" class="together"></p>
+          <div class="row">
+            ${
+              timer.paused
+                ? `<button id="resume" class="primary">Devam et ▶</button>`
+                : `<button id="pause" class="secondary">Duraklat ⏸</button>`
+            }
+            <button id="stop" class="secondary">Bitir</button>
+          </div>
+          <p class="key-hint desk-only">Boşluk tuşu: ${timer.paused ? "devam et" : "duraklat"}</p>
+        </div>
+        <aside class="tl-side">
+          ${goalHtml()}
+          ${sideFriendsHtml()}
+        </aside>
       </div>`;
     document.querySelector("#stop")!.addEventListener("click", stopEarly);
     document.querySelector("#pause")?.addEventListener("click", () => {
@@ -431,23 +463,32 @@ function render(): void {
     const askingNext = phase === "askNext";
     app.innerHTML = `
       ${headerHtml()}
-      ${goalHtml()}
-      ${ringHtml(
-        settings.fixedDurations ? formatTime(settings.defaultWorkMin * 60_000) : "Hazır",
-        askingNext ? "Sırada ne var?" : "Bir seans başlat",
-        "idle",
-      )}
-      <p class="hype">${escapeHtml(hypeMessage)}</p>
-      <p id="together" class="together"></p>
-      <section class="card form setup">
-        ${settings.fixedDurations ? "" : durationHtml()}
-        ${focusSubject ? lockedSubjectHtml() : subjectPickerHtml()}
-      </section>
-      <div class="row">
-        <button id="work" class="primary">Gazla 🚀</button>
-        ${askingNext ? `<button id="break" class="secondary">Ara ver ☕</button>` : ""}
-      </div>
-      ${focusSubject ? subjectStatsHtml(focusSubject) : ""}`;
+      <div class="tl">
+        <div class="tl-main">
+          ${ringHtml(
+            settings.fixedDurations ? formatTime(settings.defaultWorkMin * 60_000) : "Hazır",
+            askingNext ? "Sırada ne var?" : "Bir seans başlat",
+            "idle",
+          )}
+          <p class="hype">${escapeHtml(hypeMessage)}</p>
+          <p id="together" class="together"></p>
+          <section class="card form setup">
+            ${settings.fixedDurations ? "" : durationHtml()}
+            ${focusSubject ? lockedSubjectHtml() : subjectPickerHtml()}
+          </section>
+          <div class="row">
+            <button id="work" class="primary">Gazla 🚀</button>
+            ${askingNext ? `<button id="break" class="secondary">Ara ver ☕</button>` : ""}
+          </div>
+          <p class="key-hint desk-only">Boşluk tuşu: başlat</p>
+        </div>
+        <aside class="tl-side">
+          ${goalHtml()}
+          ${focusSubject ? "" : todaySideHtml()}
+          ${sideFriendsHtml()}
+          ${focusSubject ? `<div class="tl-stats">${subjectStatsHtml(focusSubject)}</div>` : ""}
+        </aside>
+      </div>`;
 
     document.querySelector("#new-project")?.addEventListener("click", openNewProjectModal);
     document.querySelectorAll<HTMLButtonElement>(".chip[data-subject]").forEach((chip) =>
@@ -485,6 +526,8 @@ function render(): void {
   updateTogetherLine();
   // Sayaç çalışıyorsa (ya da duraklatılmışsa) halkayı ve saati hemen doğru göster.
   if (running && view === "timer") updateRunningView(timer.remainingMs);
+  // Bilgisayarda menü hep açık; hangi sayfadaysak o vurgulansın diye onu da yeniden çiz.
+  if (isDesktop()) renderMenu();
 }
 
 /** Projeler tıklanabilir "chip" olarak; sonda yeni proje penceresini açan "+ Proje" butonu. */
@@ -705,8 +748,19 @@ function openNewProjectModal(): void {
 const menuRoot = document.createElement("div");
 document.body.append(menuRoot);
 
+// Bilgisayar görünümü: ekran en az 900 piksel genişse menü solda sabit durur (CSS'teki sınırla aynı).
+// C++'taki gibi düşün: bu bir "if (genişlik >= 900)"; pencere boyutu değişince sonuç da değişir.
+const desktopQuery = window.matchMedia("(min-width: 900px)");
+const isDesktop = () => desktopQuery.matches;
+desktopQuery.addEventListener("change", () => {
+  menuOpen = false;
+  renderMenu();
+  render();
+});
+
 function renderMenu(): void {
-  if (!menuOpen) {
+  const docked = isDesktop();
+  if (!menuOpen && !docked) {
     menuRoot.innerHTML = "";
     return;
   }
@@ -734,8 +788,8 @@ function renderMenu(): void {
     : `<p class="muted small-note menu-empty">Henüz proje yok.</p>`;
 
   menuRoot.innerHTML = `
-    <div class="menu-backdrop"></div>
-    <nav class="menu">
+    ${docked ? "" : `<div class="menu-backdrop"></div>`}
+    <nav class="menu ${docked ? "docked" : ""}">
       <div class="menu-head">
         <span class="menu-brand"><img class="logo-mark small" src="/logo.svg" alt="" /><span class="logo small-logo">Gazzla</span></span>
         <button class="icon big menu-close" title="Kapat">✕</button>
@@ -762,8 +816,8 @@ function renderMenu(): void {
     menuOpen = false;
     renderMenu();
   };
-  menuRoot.querySelector(".menu-backdrop")!.addEventListener("click", close);
-  menuRoot.querySelector(".menu-close")!.addEventListener("click", close);
+  menuRoot.querySelector(".menu-backdrop")?.addEventListener("click", close);
+  menuRoot.querySelector(".menu-close")?.addEventListener("click", close);
 
   menuRoot.querySelectorAll<HTMLButtonElement>(".menu-item").forEach((btn) =>
     btn.addEventListener("click", () => {
@@ -802,6 +856,18 @@ document.addEventListener("keydown", (e) => {
     menuOpen = false;
     renderMenu();
   }
+});
+
+// Boşluk tuşu: zamanlayıcı ekranında başlat / duraklat / devam et.
+// Yazı kutusundaysan ya da bir düğme seçiliyse (boşluk zaten onu tıklar) karışmıyoruz.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== " " || e.repeat || view !== "timer" || modalRoot.innerHTML) return;
+  const target = e.target as HTMLElement;
+  if (target.closest("input, textarea, select, button, [contenteditable]")) return;
+  const btn = document.querySelector<HTMLButtonElement>("#pause, #resume, #work");
+  if (!btn) return;
+  e.preventDefault(); // sayfa aşağı kaymasın
+  btn.click();
 });
 
 // ---------- Bulut eşitleme ----------
@@ -886,6 +952,16 @@ function updateTogetherLine(): void {
     parts.push(`🔥 ${iAmWorking ? "Şu an seninle çalışıyor" : "Şu an çalışıyor"}: ${working.join(", ")}${iAmWorking ? "" : " · sen de katıl!"}`);
   if (resting.length) parts.push(`☕ Arada: ${resting.join(", ")}`);
   el.innerHTML = parts.join("<br>");
+
+  // Bilgisayardaki sağ sütun kartı: her arkadaş ayrı satırda, durumuyla.
+  const side = document.querySelector("#side-friends");
+  if (side) {
+    side.innerHTML = list.length
+      ? list
+          .map((f) => `<li><span>@${escapeHtml(f.username)}</span><span class="muted small-note">${presenceText(f.presence)}</span></li>`)
+          .join("")
+      : `<li class="muted small-note">Şu an kimse çalışmıyor. İlk sen başla!</li>`;
+  }
 }
 
 /** Aktif arkadaşları Supabase'den yeniden al. */
@@ -896,6 +972,7 @@ async function refreshTogether(): Promise<void> {
   }
   activeFriends = await loadActiveFriends(authUser.id);
   updateTogetherLine();
+  if (isDesktop()) renderMenu(); // menüdeki "x kişi aktif" yazısı güncel kalsın
 }
 
 /** Arkadaşlar ekranının verilerini yeniden al; ekrandaysak yeniden çiz. */
@@ -914,6 +991,7 @@ async function refreshFriends(): Promise<void> {
     friendsError = (e as Error).message;
   }
   if (view === "friends") rerenderKeeping("#friend-name", "#username-input");
+  else if (isDesktop()) renderMenu(); // menüdeki istek rozeti güncel kalsın
 }
 
 /** Ekranı yeniden çizer ama verilen kutulara yazılmış metni korur. */

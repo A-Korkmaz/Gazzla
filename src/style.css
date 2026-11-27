@@ -1603,3 +1603,132 @@ button.icon.round:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text);
 }
+
+/* =====================================================================
+   Telefon ve bilgisayar düzeni
+   Aşağıdaki kurallar önce telefon içindir. "@media (min-width: 900px)" bloğu sadece
+   ekran 900 pikselden genişse geçerli olur, yani bilgisayar görünümü (C++'taki bir if gibi).
+   ===================================================================== */
+
+/* Telefonda iki sütunlu sarmalayıcılar yok sayılır: içlerindeki kutular doğrudan #app'in
+   elemanı olur. "order" ile eski sıraları korunur: üst çubuk, hedef kartı, halka, ... */
+.tl,
+.tl-main,
+.tl-side {
+  display: contents;
+}
+
+#app > header { order: -2; }
+.tl-side > .card.goal { order: -1; }
+
+.tl-stats {
+  order: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Sadece bilgisayarda görünen kutular (telefonda gizli). */
+@media (max-width: 899px) {
+  .desk-only { display: none !important; }
+}
+
+.side-friends {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side-friends li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.key-hint {
+  margin: -6px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (min-width: 900px) {
+  /* Solda sabit menü; içerik sağda kalan alana ortalanır. */
+  body { padding-left: 260px; }
+
+  .menu.docked {
+    width: 260px;
+    background: rgba(10, 13, 24, 0.55);
+    animation: none;
+    z-index: 5;
+    padding-top: 24px;
+  }
+  .menu.docked .menu-head { display: none; }
+  #open-menu { display: none; }
+
+  #app {
+    max-width: 1120px;
+    padding: 28px 40px 48px;
+    gap: 22px;
+  }
+
+  /* ---- Zamanlayıcı: solda halka + başlatma, sağda hedefler / özet / arkadaşlar ---- */
+  .tl {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+    gap: 28px;
+    align-items: start;
+  }
+  .tl-main,
+  .tl-side {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .tl-main .ring-wrap { width: min(300px, 100%); }
+  .tl-main .row { max-width: 460px; width: 100%; margin: 0 auto; }
+  .tl-main .setup { max-width: 560px; width: 100%; margin: 0 auto; }
+  /* Arkadaş satırı bilgisayarda sağdaki kartta, ortada tekrar etmesin. */
+  .tl-main .together { display: none; }
+
+  /* ---- Ortak: diğer sayfalar ızgara ---- */
+  #app[data-view="stats"],
+  #app[data-view="goals"],
+  #app[data-view="friends"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    align-content: start; /* satırlar ekranı doldurmak için uzamasın */
+  }
+  #app[data-view] > header,
+  #app[data-view] > .page-head,
+  #app[data-view] > button.back {
+    grid-column: 1 / -1;
+  }
+
+  /* İstatistikler: 4 kutu yan yana, altında iki kart yan yana */
+  #app[data-view="stats"] > .kpis {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* Hedefler: solda günlük/haftalık + içgörüler, sağda proje hedefleri */
+  #app[data-view="goals"] > .goal-tiles { grid-column: 1; grid-row: 3; }
+  #app[data-view="goals"] > .insights { grid-column: 1; grid-row: 4; }
+  #app[data-view="goals"] > .card { grid-column: 2; grid-row: 3 / span 2; }
+  #app[data-view="goals"] > #goals-start {
+    grid-column: 1 / -1;
+    justify-self: center;
+    min-width: 320px;
+  }
+
+  /* Hesap ve proje yönetimi: tek sütun, ama telefondan biraz geniş */
+  #app[data-view="account"],
+  #app[data-view="subjects"] {
+    max-width: 680px;
+  }
+}
