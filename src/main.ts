@@ -1010,8 +1010,8 @@ function renderAccount(): void {
         <p>Giriş yapıldı: <strong>${escapeHtml(authUser.email)}</strong></p>
         <p class="sync-status ${syncState}">${syncStatusText()}</p>
         <button id="sync-now" class="small ghost" ${syncState === "syncing" ? "disabled" : ""}>☁️ Şimdi eşitle</button>
-        <p class="muted small-note">Çalışma kayıtların bu hesaba yükleniyor; aynı hesapla telefondan girince
-          orada da görünür. Proje listesi ve hedefler şimdilik cihaza özel.</p>
+        <p class="muted small-note">Çalışma kayıtların, proje listen ve hedeflerin bu hesaba yükleniyor;
+          aynı hesapla telefondan girince orada da görünür. Proje adlarını arkadaşların göremez.</p>
         <button id="sign-out" class="secondary" ${authBusy ? "disabled" : ""}>Çıkış yap</button>
       </section>`;
     document.querySelector("#sync-now")!.addEventListener("click", () => runSync(true));

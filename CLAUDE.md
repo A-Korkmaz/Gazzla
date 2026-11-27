@@ -9,6 +9,7 @@ Windows + VS Code + Node.js v24. Telefonum Android, arkadaşlarımın bazıları
 Focus To-Do benzeri, kendime ve birkaç arkadaşıma özel çalışma zamanlayıcısı (piyasaya sürülmeyecek).
 TypeScript + Vite PWA, arayüz kütüphanesi yok (düz DOM). Tek dış kütüphane: `@supabase/supabase-js`.
 Klasör: `Belgeler\Gazzla\odak`, çalıştırma: `npm run dev` → http://localhost:5173
+Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına her push'ta kendiliğinden yeniden yayınlıyor.
 
 ## Dosyalar
 | Dosya | Ne yapar |
@@ -32,13 +33,12 @@ Klasör: `Belgeler\Gazzla\odak`, çalıştırma: `npm run dev` → http://localh
 - Projeler `projects` tablosunda, anahtar `(user_id, name)`. Silinen proje satırdan silinmez, `deleted = true`
   olur (öbür cihaz da öğrensin diye); ad değiştirme = eski ad silindi + yeni ad. Bekleyen proje adları
   `gazzla.pendingProjects`'te. İki cihaz internetsizken aynı projeyi değiştirirse son yükleyen kazanır.
-- Supabase: bölge Zürih, Site URL `http://localhost:5173` (yayınlayınca gerçek adres eklenmeli).
+- Supabase: bölge Zürih. Site URL'nin canlı adres olduğunu kontrol et (e-posta onay bağlantıları oraya gider).
 
 ## Sırada
-1. Uygulamayı internette yayınlamak (Netlify/Vercel), Supabase'de Site URL'yi güncellemek
-2. PWA simgesi ve çevrimdışı çalışma (telefona "uygulama gibi" kurulsun)
-3. Ayarlar ekranı (isim, sabit süreler)
-4. Hedefin gerisinde kalınca hatırlatma bildirimi (uyku saatine kalan süre < kalan hedefin 2 katı)
+1. PWA simgesi ve çevrimdışı çalışma (telefona "uygulama gibi" kurulsun)
+2. Ayarlar ekranı (isim, sabit süreler)
+3. Hedefin gerisinde kalınca hatırlatma bildirimi (uyku saatine kalan süre < kalan hedefin 2 katı)
 
 ## Çalışma kuralları (Claude için)
 - Her oturumda tek iş: kullanıcı "Sırada" listesinden bir madde seçer.
