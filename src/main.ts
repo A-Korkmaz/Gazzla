@@ -81,6 +81,15 @@ let editingGoal: GoalKind | undefined; // hangi hedef düzenleniyor (yoksa hiçb
 // ve ekranda o dersin hedefi ve istatistikleri görünür. undefined = ana ekran.
 let focusSubject: string | undefined;
 let menuOpen = false;
+// Bilgisayarda sol menü daraltılmış mı (yalnız ikonlar)? Seçim bu cihazda hatırlanır.
+const MENU_COLLAPSED_KEY = "gazzla.menuCollapsed";
+let menuCollapsed = (() => {
+  try {
+    return localStorage.getItem(MENU_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+})();
 
 // Halkanın çevresi: 2 * pi * r. SVG'de r = 110.
 const RING_CIRCUMFERENCE = 2 * Math.PI * 110;
@@ -267,6 +276,16 @@ const ICONS = {
   menu: svgIcon('<path d="M4 7h16M4 12h16M4 17h10"/>'),
   chart: svgIcon('<path d="M5 20V11M12 20V5M19 20v-6"/>'),
   timer: svgIcon('<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2M10 3h4"/>'),
+  // Sol menü ikonları
+  home: svgIcon('<path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/>'),
+  folder: svgIcon('<path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/>'),
+  target: svgIcon('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>'),
+  stats: svgIcon('<path d="M4 4v16h16"/><path d="M8 15v-3M12.5 15V8M17 15v-5"/>'),
+  users: svgIcon('<circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 19.5c.6-3.2 3.2-5 6.5-5s5.9 1.8 6.5 5"/><path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M18 14.8c1.9.7 3.1 2.3 3.5 4.7"/>'),
+  user: svgIcon('<circle cx="12" cy="8.5" r="4"/><path d="M4.5 20c.8-3.6 3.8-5.8 7.5-5.8s6.7 2.2 7.5 5.8"/>'),
+  collapse: svgIcon('<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15M15.5 10l-2 2 2 2"/>'),
+  expand: svgIcon('<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15M13.5 10l2 2-2 2"/>'),
+  close: svgIcon('<path d="M6 6l12 12M18 6 6 18"/>'),
 };
 
 function headerHtml(): string {
@@ -477,7 +496,7 @@ function render(): void {
             ${focusSubject ? lockedSubjectHtml() : subjectPickerHtml()}
           </section>
           <div class="row">
-            <button id="work" class="primary">Gazla 🚀</button>
+            <button id="work" class="primary">Gazzla 🚀</button>
             ${askingNext ? `<button id="break" class="secondary">Ara ver ☕</button>` : ""}
           </div>
           <p class="key-hint desk-only">Boşluk tuşu: başlat</p>
@@ -612,7 +631,7 @@ function updateDurationUi(): void {
     .forEach((b) => b.classList.toggle("selected", Number(b.dataset.min) === min));
 
   const work = document.querySelector<HTMLButtonElement>("#work");
-  if (work) work.textContent = min > 0 ? `Gazla · ${min} dk 🚀` : "Gazla 🚀";
+  if (work) work.textContent = min > 0 ? `Gazzla · ${min} dk 🚀` : "Gazzla 🚀";
 
   const hint = document.querySelector<HTMLElement>("#duration-hint");
   if (!hint) return;
@@ -737,7 +756,7 @@ function openNewProjectModal(): void {
     const minutesInput = document.querySelector<HTMLInputElement>("#minutes");
     if (minutesInput && minutes) minutesInput.value = minutes;
     updateDurationUi();
-    toast(`${name} eklendi. Gazla!`);
+    toast(`${name} eklendi. Gazzla!`);
   });
 }
 
@@ -768,6 +787,30 @@ function renderMenu(): void {
   const running = phase === "work" || phase === "break";
   const lock = running ? "disabled" : "";
   const subjects = loadSubjects();
+  // Daraltma yalnız bilgisayarda: telefonda menü zaten açılıp kapanan bir çekmece.
+  const collapsed = docked && menuCollapsed;
+  document.body.classList.toggle("menu-collapsed", collapsed);
+
+  // Tek bir menü satırı: solda ikon, sağda başlık (+ altında küçük not).
+  // Daraltılmışken yazılar gizlenir; adı üstüne gelince "title" ipucuyla görünür.
+  // C++'taki gibi düşün: aynı kalıbı her satır için tekrar yazmamak için küçük bir yardımcı fonksiyon.
+  const item = (opts: {
+    attrs: string;
+    active: boolean;
+    icon: string;
+    label: string;
+    note?: string;
+    badge?: number;
+    disabled?: boolean;
+  }) => `
+    <button class="menu-item ${opts.active ? "active" : ""}" ${opts.attrs} ${opts.disabled ? "disabled" : ""}
+      ${collapsed ? `title="${opts.label}"` : ""} aria-label="${opts.label}">
+      <span class="mi-icon">${opts.icon}${opts.badge ? `<span class="mi-badge">${opts.badge}</span>` : ""}</span>
+      <span class="mi-text">
+        <span class="mi-label">${opts.label}</span>
+        ${opts.note ? `<span class="muted small-note">${opts.note}</span>` : ""}
+      </span>
+    </button>`;
 
   const subjectItems = subjects.length
     ? subjects
@@ -777,40 +820,65 @@ function renderMenu(): void {
           const info = goal !== undefined
             ? `${formatMinutes(Math.floor(week))} / ${formatMinutes(goal)}${week >= goal ? " ✅" : ""}`
             : `${formatMinutes(Math.floor(week))} bu hafta`;
-          const active = focusSubject === name && view === "timer";
-          return `
-            <button class="menu-item ${active ? "active" : ""}" data-subject="${escapeHtml(name)}" ${lock}>
-              <span>${escapeHtml(name)}</span>
-              <span class="muted small-note">${info}</span>
-            </button>`;
+          const safe = escapeHtml(name);
+          return item({
+            attrs: `data-subject="${safe}"`,
+            active: focusSubject === name && view === "timer",
+            icon: `<span class="mi-letter">${escapeHtml([...name.trim()][0]?.toLocaleUpperCase("tr") ?? "?")}</span>`,
+            label: safe,
+            note: info,
+            disabled: running,
+          });
         })
         .join("")
     : `<p class="muted small-note menu-empty">Henüz proje yok.</p>`;
 
+  const toggleBtn = docked
+    ? `<button class="icon round menu-toggle" title="${collapsed ? "Menüyü aç" : "Menüyü daralt"}"
+        aria-label="${collapsed ? "Menüyü aç" : "Menüyü daralt"}">${collapsed ? ICONS.expand : ICONS.collapse}</button>`
+    : `<button class="icon round menu-close" title="Kapat" aria-label="Kapat">${ICONS.close}</button>`;
+
   menuRoot.innerHTML = `
     ${docked ? "" : `<div class="menu-backdrop"></div>`}
-    <nav class="menu ${docked ? "docked" : ""}">
+    <nav class="menu ${docked ? "docked" : ""} ${collapsed ? "collapsed" : ""}">
       <div class="menu-head">
         <span class="menu-brand"><img class="logo-mark small" src="/logo.svg" alt="" /><span class="logo small-logo">Gazzla</span></span>
-        <button class="icon big menu-close" title="Kapat">✕</button>
+        ${toggleBtn}
       </div>
-      <button class="menu-item ${!focusSubject && view === "timer" ? "active" : ""}" data-go="home" ${lock}>🏠 Ana ekran</button>
-      <div class="menu-section">Projeler</div>
+      ${item({ attrs: 'data-go="home"', active: !focusSubject && view === "timer", icon: ICONS.home, label: "Ana ekran", disabled: running })}
+      <div class="menu-section"><span>Projeler</span></div>
       ${subjectItems}
       ${running ? `<p class="muted small-note menu-empty">Seans sürerken proje değiştirilemez.</p>` : ""}
       <div class="menu-section"></div>
-      <button class="menu-item" data-go="subjects" ${lock}>📚 Projeleri yönet</button>
-      <button class="menu-item ${view === "goals" ? "active" : ""}" data-go="goals">🎯 Hedefler</button>
-      <button class="menu-item ${view === "stats" ? "active" : ""}" data-go="stats">📊 İstatistikler</button>
-      <button class="menu-item ${view === "friends" ? "active" : ""}" data-go="friends">
-        <span>👥 Arkadaşlar${friendsData?.incoming.length ? ` <span class="badge">${friendsData.incoming.length}</span>` : ""}</span>
-        ${activeFriends.length ? `<span class="muted small-note">🟢 ${activeFriends.length} kişi şu an aktif</span>` : ""}
-      </button>
-      <button class="menu-item ${view === "account" ? "active" : ""}" data-go="account">
-        <span>👤 Hesap</span>
-        <span class="muted small-note">${authUser ? escapeHtml(authUser.email) : "Giriş yapılmadı"}</span>
-      </button>
+      ${item({ attrs: 'data-go="subjects"', active: view === "subjects", icon: ICONS.folder, label: "Projeleri yönet", disabled: running })}
+      ${item({ attrs: 'data-go="goals"', active: view === "goals", icon: ICONS.target, label: "Hedefler" })}
+      ${item({ attrs: 'data-go="stats"', active: view === "stats", icon: ICONS.stats, label: "İstatistikler" })}
+      ${item({
+        attrs: 'data-go="friends"',
+        active: view === "friends",
+        icon: ICONS.users,
+        label: "Arkadaşlar",
+        note: activeFriends.length ? `<span class="live-dot"></span>${activeFriends.length} kişi şu an aktif` : undefined,
+        badge: friendsData?.incoming.length,
+      })}
+      ${item({
+        attrs: 'data-go="account"',
+        active: view === "account",
+        icon: ICONS.user,
+        label: "Hesap",
+        note: authUser ? escapeHtml(authUser.email) : "Giriş yapılmadı",
+      })}
     </nav>`;
+
+  menuRoot.querySelector(".menu-toggle")?.addEventListener("click", () => {
+    menuCollapsed = !menuCollapsed;
+    try {
+      localStorage.setItem(MENU_COLLAPSED_KEY, menuCollapsed ? "1" : "0");
+    } catch {
+      /* gizli pencerede kaydedilemezse sorun değil */
+    }
+    renderMenu();
+  });
 
   const close = () => {
     menuOpen = false;
@@ -1014,7 +1082,7 @@ function renderFriends(): void {
     body = `
       <section class="card account">
         <div class="card-title">Arkadaşlar</div>
-        <p class="muted">Arkadaşlarınla birbirinizi gazlamak için önce giriş yap.</p>
+        <p class="muted">Arkadaşlarınla birbirinizi gazzlamak için önce giriş yap.</p>
         <button id="go-account" class="primary">👤 Giriş yap</button>
       </section>`;
   } else if (myProfile === undefined) {
@@ -1159,7 +1227,7 @@ function renderFriends(): void {
   document.querySelectorAll<HTMLButtonElement>(".accept").forEach((btn) =>
     btn.addEventListener("click", async () => {
       const error = await acceptRequest(btn.dataset.id!, authUser!.id);
-      toast(error ?? "Artık arkadaşsınız! Birbirinizi gazlayın 🔥");
+      toast(error ?? "Artık arkadaşsınız! Birbirinizi gazzlayın 🔥");
       refreshFriends();
     }),
   );
@@ -1280,7 +1348,7 @@ function renderAccount(): void {
         const error = await signIn(email, password);
         authBusy = false;
         if (error) toast(error);
-        else toast("Giriş yapıldı. Gazla! 🚀");
+        else toast("Giriş yapıldı. Gazzla! 🚀");
       }
       render();
       // Hata olduysa e-posta kutusu boş kalmasın.
@@ -1698,7 +1766,7 @@ function renderGoals(): void {
       </div>
       <ul class="prows">${projectItems}</ul>
     </section>
-    <button class="primary" id="goals-start">Hedefe gazla 🚀</button>`;
+    <button class="primary" id="goals-start">Hedefe gazzla 🚀</button>`;
 
   document.querySelectorAll<HTMLButtonElement>("[data-gedit]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -1753,16 +1821,16 @@ function renderGoals(): void {
     if (key === "daily") {
       settings.dailyGoalMin = minutes;
       saveSettings(settings);
-      toast(`Yeni günlük hedef: ${formatMinutes(minutes)}. Gazla!`);
+      toast(`Yeni günlük hedef: ${formatMinutes(minutes)}. Gazzla!`);
     } else if (key === "weekly") {
       settings.weeklyGoalMin = minutes;
       saveSettings(settings);
-      toast(`Yeni haftalık hedef: ${formatMinutes(minutes)}. Gazla!`);
+      toast(`Yeni haftalık hedef: ${formatMinutes(minutes)}. Gazzla!`);
     } else {
       const name = key.slice(2);
       setSubjectGoal(name, minutes);
       runSync();
-      toast(`${name} için haftalık hedef: ${formatMinutes(minutes)}. Gazla!`);
+      toast(`${name} için haftalık hedef: ${formatMinutes(minutes)}. Gazzla!`);
     }
     close();
   };
@@ -1800,16 +1868,16 @@ function bindGoalEditing(): void {
       setSubjectGoal(focusSubject!, value);
       runSync();
       editingGoal = undefined;
-      toast(`${focusSubject} için haftalık hedef: ${formatMinutes(value)}. Gazla!`);
+      toast(`${focusSubject} için haftalık hedef: ${formatMinutes(value)}. Gazzla!`);
       render();
       return;
     }
     if (editingGoal === "weekly") {
       settings.weeklyGoalMin = value;
-      toast(`Yeni haftalık hedef: ${formatMinutes(value)}. Gazla!`);
+      toast(`Yeni haftalık hedef: ${formatMinutes(value)}. Gazzla!`);
     } else {
       settings.dailyGoalMin = value;
-      toast(`Yeni günlük hedef: ${value} dk. Gazla!`);
+      toast(`Yeni günlük hedef: ${value} dk. Gazzla!`);
     }
     saveSettings(settings);
     editingGoal = undefined;

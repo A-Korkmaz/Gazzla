@@ -40,6 +40,10 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
   "Arkadaşlar şu an"), istatistik/hedefler/arkadaşlar ızgara (`#app[data-view=...]`). Telefonda `.tl*` sarmalayıcıları
   `display: contents` + `order` ile eski sıraya döner. Yalnız bilgisayarda görünenler `.desk-only`.
   Boşluk tuşu zamanlayıcıda başlat/duraklat/devam.
+- Bilgisayarda sol menü daraltılabilir (üstteki düğme): daralınca 72 px'lik ikon şeridi (`.menu.collapsed`,
+  `body.menu-collapsed`), seçim `gazzla.menuCollapsed`'ta. Menü satırları `item()` yardımcısıyla çiziliyor;
+  ikonlar `ICONS`'taki çizgi SVG'ler, projeler baş harf rozeti (`.mi-letter`). Menüde emoji yok.
+- **Marka adı her yerde "Gazzla" (iki z).** Fiil olarak da: "Gazzla 🚀", "Hedefe gazzla", "birbirinizi gazzlayın".
 - Giriş **zorunlu değil**; uygulama girişsiz de çalışır.
 - Kayıtların asıl yeri cihaz (localStorage); giriş yapılmışsa arka planda Supabase'e eşitlenir.
 - **Proje adları arkadaşlardan gizli.** Arkadaşlar seans satırlarını okuyamaz; sadece `friend_totals()`
@@ -53,7 +57,7 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 ## Durum (son güncelleme 2026-11-27)
 - Bitti: seans eşitlemesi, arkadaşlar, proje listesi + hedeflerin eşitlenmesi (canlı sitede iki cihazla test edildi),
   internette yayın (Netlify), giriş (tanıtım) sayfası, yeni görünüm + hedefler sayfası (2026-11-27),
-  bilgisayar (geniş ekran) görünümü (2026-11-27).
+  bilgisayar (geniş ekran) görünümü (2026-11-27), daraltılabilir menü + SVG menü ikonları + "Gazzla" yazımı (2026-11-27).
 - Açık küçük kontrol: Supabase → Authentication → URL Configuration → **Site URL** hâlâ `http://localhost:5173`
   olabilir; `https://gazzla-08t7.netlify.app` olmalı (yoksa arkadaşların kayıt onay e-postası localhost'a gider).
 - Bulutta `__test__` ve `__test2__` adlı iki `deleted = true` test satırı var; zararsız.

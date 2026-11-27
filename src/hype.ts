@@ -2,7 +2,7 @@
 // İstediğin kadar ekleyip çıkarabilirsin.
 
 const START = [
-  "Gazla {ad}! Bu seans senin.",
+  "Gazzla {ad}! Bu seans senin.",
   "Telefon kenara, odak sende.",
   "Hadi {ad}, bir seans daha, hedef yaklaşıyor.",
   "Küçük adımlar, büyük sınavlar. Başla!",
@@ -39,7 +39,7 @@ const SUBJECT_GOAL_MET = [
 
 const BREAK_OVER = [
   "Ara bitti {ad}, masaya dön!",
-  "Mola yeter, gazlamaya devam.",
+  "Mola yeter, gazzlamaya devam.",
 ];
 
 function pick(list: string[], name: string): string {

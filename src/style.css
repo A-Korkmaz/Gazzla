@@ -869,13 +869,13 @@ button.danger {
 
 button.menu-item {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
   width: 100%;
   text-align: left;
-  padding: 10px 12px;
-  border-radius: 14px;
+  padding: 9px 10px;
+  border-radius: 12px;
   background: transparent;
   border: 1px solid transparent;
   color: var(--text);
@@ -883,8 +883,73 @@ button.menu-item {
   font-weight: 600;
 }
 
+/* Sol menü satırı: ikon kutusu + yazı */
+.mi-icon {
+  position: relative;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  transition: color 0.15s ease;
+}
+.mi-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.mi-letter {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1.5px solid currentColor;
+}
+.mi-badge {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+}
+.mi-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mi-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+
 button.menu-item:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.05);
+}
+button.menu-item:hover:not(:disabled) .mi-icon,
+button.menu-item.active .mi-icon {
+  color: var(--text);
 }
 
 button.menu-item.active {
@@ -1658,17 +1723,42 @@ button.icon.round:hover:not(:disabled) {
 
 @media (min-width: 900px) {
   /* Solda sabit menü; içerik sağda kalan alana ortalanır. */
-  body { padding-left: 260px; }
+  body { padding-left: 260px; transition: padding-left 0.2s ease; }
+  body.menu-collapsed { padding-left: 72px; }
 
   .menu.docked {
     width: 260px;
     background: rgba(10, 13, 24, 0.55);
     animation: none;
     z-index: 5;
-    padding-top: 24px;
+    padding-top: 16px;
+    overflow-x: hidden;
+    transition: width 0.2s ease, padding 0.2s ease;
   }
-  .menu.docked .menu-head { display: none; }
+  /* Üst çubukta zaten logo var; burada yalnız daralt/aç düğmesi kalır. */
+  .menu.docked .menu-head { justify-content: flex-end; margin-bottom: 4px; }
+  .menu.docked .menu-brand { display: none; }
   #open-menu { display: none; }
+
+  /* Daraltılmış menü: yalnız ikonlar */
+  .menu.docked.collapsed {
+    width: 72px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .menu.collapsed .menu-head { justify-content: center; }
+  .menu.collapsed button.menu-item {
+    justify-content: center;
+    padding: 10px 0;
+  }
+  .menu.collapsed .mi-text,
+  .menu.collapsed .menu-empty,
+  .menu.collapsed .menu-section > span { display: none; }
+  .menu.collapsed .menu-section {
+    margin: 10px 6px;
+    height: 1px;
+    background: var(--border);
+  }
 
   #app {
     max-width: 1120px;
