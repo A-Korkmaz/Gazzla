@@ -49,17 +49,18 @@ import {
   type AuthUser,
 } from "./supabase";
 import type { Session } from "./types";
-import { escapeHtml, formatMinutes, projectColor } from "./util";
+import { clockText, escapeHtml, formatMinutes, projectColor } from "./util";
 import { blocksOn, renameBlocksSubject } from "./timetable";
 import { nowBlockHtml, renderTimetable, weekPlanCardHtml, type TimetableCtx } from "./timetableView";
 import { fetchExternal, gcalSync, onGcalChange } from "./gcal";
+import { renderAssistant, type AssistantCtx } from "./assistant";
 
 type Phase = "idle" | "work" | "break" | "askNext";
 
 const app = document.querySelector<HTMLElement>("#app")!;
 const settings = loadSettings();
 let phase: Phase = "idle";
-let view: "timer" | "stats" | "goals" | "subjects" | "account" | "friends" | "timetable" = "timer";
+let view: "timer" | "stats" | "goals" | "subjects" | "account" | "friends" | "timetable" | "assistant" = "timer";
 let goalsEdit: string | undefined; // hedefler sayfasında düzenlenen: "daily", "weekly" ya da "p:<proje>"
 // Arkadaşlar
 let myProfile: Profile | null | undefined; // undefined = henüz yüklenmedi, null = kullanıcı adı yok
@@ -283,6 +284,7 @@ const ICONS = {
   collapse: svgIcon('<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15M15.5 10l-2 2 2 2"/>'),
   expand: svgIcon('<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15M13.5 10l2 2-2 2"/>'),
   close: svgIcon('<path d="M6 6l12 12M18 6 6 18"/>'),
+  sparkle: svgIcon('<path d="M12 3.5c.6 4.3 2.2 5.9 6.5 6.5-4.3.6-5.9 2.2-6.5 6.5-.6-4.3-2.2-5.9-6.5-6.5 4.3-.6 5.9-2.2 6.5-6.5z"/><path d="M18.5 15.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5z"/>'),
   // Satır içi küçük ikonlar (düğmeler, süre notu)
   bolt: svgIcon('<path d="M13 3 5 13.5h6L10.5 21 19 10h-6z"/>'),
   clock: svgIcon('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
@@ -436,6 +438,8 @@ function render(): void {
     renderFriends();
   } else if (view === "timetable") {
     renderTimetable(timetableCtx);
+  } else if (import.meta.env.DEV && view === "assistant") {
+    renderAssistant(assistantCtx);
   } else if (running) {
     const subtitle =
       phase === "work" ? escapeHtml(currentSubject ?? "Genel çalışma") : "Ara";
@@ -797,6 +801,41 @@ const timetableCtx: TimetableCtx = {
   },
   syncGoogle: () => syncGoogle(),
 };
+// Gazzla AI sayfasına (assistant.ts) verdiğimiz ortak şeyler.
+const assistantCtx: AssistantCtx = {
+  app,
+  headerHtml,
+  pageHeadHtml,
+  rerender: () => render(),
+  contextText: assistantContext,
+};
+
+/** Asistanın bilmesi gereken veriler, düz metin. Yalnız kullanıcı soru sorunca gönderilir. */
+function assistantContext(): string {
+  const now = new Date();
+  const fmt = (m: number) => formatMinutes(Math.floor(m));
+  const lines = [
+    `Şu an: ${now.toLocaleString("tr-TR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}`,
+    settings.userName ? `Kullanıcının adı: ${settings.userName}` : "",
+    `Bugün çalışılan: ${fmt(todayWorkMinutes())} (günlük hedef: ${settings.dailyGoalMin > 0 ? fmt(settings.dailyGoalMin) : "yok"})`,
+    `Bu hafta (pazartesiden beri) çalışılan: ${fmt(weekWorkMinutes())} (haftalık hedef: ${settings.weeklyGoalMin > 0 ? fmt(settings.weeklyGoalMin) : "yok"})`,
+    `Seri: üst üste ${currentStreak(settings.dailyGoalMin)} gün günlük hedef tutturuldu`,
+  ];
+  const subjects = loadSubjects();
+  lines.push(subjects.length ? "Projeler (bu haftaki süre / haftalık hedef):" : "Henüz proje yok.");
+  for (const name of subjects) {
+    const goal = subjectGoal(name);
+    lines.push(`- ${name}: ${fmt(weekWorkMinutes(name))}${goal !== undefined ? ` / ${fmt(goal)}` : " (hedef yok)"}`);
+  }
+  const today = blocksOn(now);
+  lines.push(today.length ? "Bugünkü program:" : "Bugün programda blok yok.");
+  for (const b of today)
+    lines.push(`- ${clockText(b.start)}–${clockText(b.end)} ${b.kind === "fixed" ? `${b.title ?? "Etkinlik"} (sabit etkinlik)` : `${b.subject ?? "Genel çalışma"} çalışması`}`);
+  const days = lastSevenDays();
+  lines.push(`Son 7 gün: ${days.map((d) => `${d.label} ${fmt(d.minutes)}`).join(", ")}`);
+  return lines.filter(Boolean).join("\n");
+}
+
 desktopQuery.addEventListener("change", () => {
   menuOpen = false;
   renderMenu();
@@ -880,6 +919,7 @@ function renderMenu(): void {
       ${item({ attrs: 'data-go="timetable"', active: view === "timetable", icon: ICONS.calendar, label: "Program" })}
       ${item({ attrs: 'data-go="goals"', active: view === "goals", icon: ICONS.target, label: "Hedefler" })}
       ${item({ attrs: 'data-go="stats"', active: view === "stats", icon: ICONS.stats, label: "İstatistikler" })}
+      ${import.meta.env.DEV ? item({ attrs: 'data-go="assistant"', active: view === "assistant", icon: ICONS.sparkle, label: "Gazzla AI" }) : ""}
       ${item({
         attrs: 'data-go="friends"',
         active: view === "friends",
@@ -931,6 +971,8 @@ function renderMenu(): void {
         view = "stats";
       } else if (go === "timetable") {
         view = "timetable";
+      } else if (go === "assistant") {
+        view = "assistant";
       } else if (go === "goals") {
         view = "goals";
         goalsEdit = undefined;
