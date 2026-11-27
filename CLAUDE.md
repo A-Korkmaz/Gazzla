@@ -29,8 +29,8 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 | `supabase/functions/gcal-auth/index.ts` | Supabase Edge Function: Google yenileme anahtarını `google_tokens` tablosunda saklar, tarayıcıya 1 saatlik erişim anahtarı verir (exchange / token / disconnect). Gizliler: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
 | `src/timetableView.ts` | Program sayfası (haftalık tablo, blok penceresi, "Plan ve gerçek" kartı) + zamanlayıcıdaki "Programda şimdi" kartı. main.ts'ten `TimetableCtx` ile çağrılır |
 | `supabase/01_sessions.sql`, `02_friends.sql`, `03_projects.sql`, `04_timetable.sql`, `05_google.sql` | Supabase tabloları ve RLS kuralları. **01–05 SQL Editor'de çalıştırıldı**; tekrar çalıştırma (`create policy` hata verir). `google_tokens`'ta bilerek hiç kural yok (yalnız sunucu fonksiyonu erişir). Yeni tablo → `06_...sql` |
-| `src/assistant.ts` | "Gazzla AI" sohbet sayfası (`view = "assistant"`, menüde yalnız `npm run dev`'de). Kullanıcı verisini `assistantContext()` (main.ts) düz metin yapar, system prompt'la `/api/ai`'ye yollar, cevabı parça parça yazar. Sohbet kaydedilmez |
-| `vite.config.ts` | Yalnız dev sunucusunda `/api/ai` aracısı: `.env.local`'deki `GROQ_API_KEY`'i ekleyip Groq'a (`openai/gpt-oss-120b`, düşünme "low") iletir, cevabın sadece yazısını döndürür (servis/model adı tarayıcıya gitmez) |
+| `src/assistant.ts` | "Gazzla AI" sohbet sayfası (`view = "assistant"`, menüde yalnız `npm run dev`'de). Kullanıcı verisini `assistantContext()` (main.ts) düz metin yapar, system prompt'la `/api/ai`'ye yollar, cevabı parça parça yazar. Sohbet kaydedilmez. `program_oner` aracı → önizleme kartı → "Programa ekle" (`putBlock` + `changed`). Mikrofon (sessizlikte kendiliğinden durur) + "Sesli sohbet" (cevabı tarayıcının Türkçe sesiyle okur, sonra yine dinler; seçim `gazzla.aiVoice`) |
+| `vite.config.ts` | Yalnız dev sunucusunda `/api/ai` aracısı: `.env.local`'deki `GROQ_API_KEY`'i ekleyip Groq'a (`openai/gpt-oss-120b`, düşünme "low") iletir; tarayıcıya NDJSON (`{text}` / `{tool,args}`) döner, servis/model adı tarayıcıya gitmez. `/api/transcribe`: ses kaydı → `whisper-large-v3-turbo` → yazı |
 | `public/gizlilik.html` | Gizlilik sayfası (düz HTML, Türkçe + kısa İngilizce). Google izin ekranındaki privacy policy bağlantısı buraya gider; veri kullanımı değişirse güncelle |
 | `public/manifest.webmanifest` | PWA bilgisi (ad, renkler, simgeler). Service worker **yok** |
 | `public/logo.svg`, `public/icons/` | Logo (favicon + üst çubuk/menü) ve PNG simgeler: 192, 512, maskable-512 (logo küçültülmüş), apple-touch-icon 180 (köşesiz). PNG'ler logo.svg'den Edge headless ile üretildi; logo değişirse yeniden üret |
@@ -56,6 +56,9 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
   system prompt "Ben Gazzla AI'yım" dedirtir. **Şimdilik yalnız localhost**: menü satırı ve sayfa `import.meta.env.DEV`
   ile korunuyor, derlenmiş sitede kodu bile yok. Anahtar `.env.local`'de (gitignore'da), Ahmet kendisi yazar.
   Proje adları ve süreler yalnız soru sorulunca Groq'a gider.
+  Programa ekleme: model sadece **gün (weekday) + repeat** verir, tek seferlik bloğun tarihini kod hesaplar (model tarihleri
+  karıştırıyordu). Hiçbir şey kullanıcı karttan onaylamadan eklenmez. Listede olmayan ad yine `fixed` olur (Ahmet'in kuralı).
+  Groq ücretsiz katmanında dakikalık sınır var (art arda 4 istekte 429 → "Biraz fazla hızlı gittik").
 - Giriş **zorunlu değil**; uygulama girişsiz de çalışır.
 - Kayıtların asıl yeri cihaz (localStorage); giriş yapılmışsa arka planda Supabase'e eşitlenir.
 - **Proje adları arkadaşlardan gizli.** Arkadaşlar seans satırlarını okuyamaz; sadece `friend_totals()`

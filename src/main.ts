@@ -807,6 +807,11 @@ const assistantCtx: AssistantCtx = {
   headerHtml,
   pageHeadHtml,
   rerender: () => render(),
+  changed: () => runSync(),
+  openTimetable: () => {
+    view = "timetable";
+    render();
+  },
   contextText: assistantContext,
 };
 
