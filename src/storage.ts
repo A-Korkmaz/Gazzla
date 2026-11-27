@@ -216,13 +216,18 @@ export function addSubject(name: string): boolean {
   if (list.some((s) => s.toLowerCase() === name.toLowerCase())) return false;
   list.push(name);
   saveSubjects(list);
+  markPendingProjects([name]);
   return true;
 }
 
 /** Dersi listeden kaldırır. Geçmiş kayıtlar ve istatistikler silinmez; dersin hedefi silinir. */
 export function removeSubject(name: string): void {
-  saveSubjects(loadSubjects().filter((s) => s !== name));
+  const list = loadSubjects();
+  const index = list.indexOf(name);
+  saveSubjects(list.filter((s) => s !== name));
   setSubjectGoal(name, undefined);
+  // Silinen proje "silindi" olarak, arkasındakiler de yeni sıralarıyla yüklensin.
+  markPendingProjects([name, ...(index >= 0 ? list.slice(index + 1) : [])]);
 }
 
 /** Dersin adını değiştirir; geçmiş seanslar da yeni adla güncellenir. */
@@ -230,6 +235,7 @@ export function renameSubject(oldName: string, newName: string): boolean {
   const list = loadSubjects();
   if (list.some((s) => s !== oldName && s.toLowerCase() === newName.toLowerCase())) return false;
   saveSubjects(list.map((s) => (s === oldName ? newName : s)));
+  markPendingProjects([oldName, newName]); // bulutta: eski ad silindi, yeni ad eklendi
   // Hedefi de yeni ada taşı.
   const goal = loadSubjectGoals()[oldName];
   if (goal !== undefined) {
@@ -269,5 +275,47 @@ export function setSubjectGoal(name: string, minutes: number | undefined): void 
   const goals = loadSubjectGoals();
   if (minutes === undefined) delete goals[name];
   else goals[name] = minutes;
+  localStorage.setItem(SUBJECT_GOALS_KEY, JSON.stringify(goals));
+  markPendingProjects([name]);
+}
+
+// ---------- Proje eşitlemesi (bulut) için yardımcılar ----------
+// Seanslardaki "bekleyenler" listesinin aynısı, ama kimlik yerine proje ADLARINI tutar.
+// Bir ad buradaysa: o projenin bu cihazdaki hali (var/silindi, hedefi, sırası) henüz yüklenmedi.
+
+const PENDING_PROJECTS_KEY = "gazzla.pendingProjects";
+const PROJECTS_OWNER_KEY = "gazzla.projectsSyncOwner"; // projeler en son hangi hesapla eşitlendi
+
+export function loadPendingProjects(): string[] {
+  const raw = localStorage.getItem(PENDING_PROJECTS_KEY);
+  return raw ? (JSON.parse(raw) as string[]) : [];
+}
+
+export function markPendingProjects(names: string[]): void {
+  const set = new Set(loadPendingProjects());
+  names.forEach((n) => set.add(n));
+  localStorage.setItem(PENDING_PROJECTS_KEY, JSON.stringify([...set]));
+}
+
+/** Yüklenen adları bekleyenlerden çıkarır (yükleme sırasında yeni değişenler kalır). */
+export function clearPendingProjects(names: string[]): void {
+  const done = new Set(names);
+  localStorage.setItem(
+    PENDING_PROJECTS_KEY,
+    JSON.stringify(loadPendingProjects().filter((n) => !done.has(n))),
+  );
+}
+
+export function loadProjectsOwner(): string | null {
+  return localStorage.getItem(PROJECTS_OWNER_KEY);
+}
+
+export function saveProjectsOwner(userId: string): void {
+  localStorage.setItem(PROJECTS_OWNER_KEY, userId);
+}
+
+/** Proje listesini ve hedefleri topluca yazar (eşitlemede buluttan gelenle birleştirilmiş hal). */
+export function replaceProjects(list: string[], goals: Record<string, number>): void {
+  saveSubjects(list);
   localStorage.setItem(SUBJECT_GOALS_KEY, JSON.stringify(goals));
 }

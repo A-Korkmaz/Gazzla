@@ -570,6 +570,7 @@ function openNewProjectModal(): void {
       input.select();
       return;
     }
+    runSync(); // giriş yapılmışsa hesaba da yükle
     close();
     currentSubject = name; // yeni proje hemen seçili olsun
     // render() ekranı baştan çizer; yazılmış süre kaybolmasın diye saklayıp geri koyuyoruz.
@@ -1164,6 +1165,7 @@ function renderSubjects(): void {
       toast(`"${name}" zaten listede.`);
       return;
     }
+    runSync(); // giriş yapılmışsa hesaba da yükle
     toast(`${name} eklendi.`);
     render();
     document.querySelector<HTMLInputElement>("#add-name")?.focus();
@@ -1188,6 +1190,7 @@ function renderSubjects(): void {
         toast(`"${newName}" zaten listede.`);
         return;
       }
+      runSync();
       if (currentSubject === oldName) currentSubject = newName;
       if (focusSubject === oldName) focusSubject = newName;
       if (settings.lastSubject === oldName) {
@@ -1214,6 +1217,7 @@ function renderSubjects(): void {
         return;
       }
       removeSubject(name);
+      runSync();
       if (currentSubject === name) currentSubject = undefined;
       if (focusSubject === name) focusSubject = undefined;
       if (settings.lastSubject === name) {
@@ -1323,6 +1327,7 @@ function bindGoalEditing(): void {
     }
     if (editingGoal === "subject") {
       setSubjectGoal(focusSubject!, value);
+      runSync();
       editingGoal = undefined;
       toast(`${focusSubject} için haftalık hedef: ${formatMinutes(value)}. Gazla!`);
       render();
@@ -1342,6 +1347,7 @@ function bindGoalEditing(): void {
   document.querySelector("#goal-save")?.addEventListener("click", save);
   document.querySelector("#goal-remove")?.addEventListener("click", () => {
     setSubjectGoal(focusSubject!, undefined);
+    runSync();
     editingGoal = undefined;
     toast(`${focusSubject} için hedef kaldırıldı.`);
     render();

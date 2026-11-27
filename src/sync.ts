@@ -1,4 +1,4 @@
-// Çalışma kayıtlarını Supabase ile eşitleme.
+// Çalışma kayıtlarını ve proje listesini (hedefleriyle) Supabase ile eşitleme.
 //
 // Fikir: Kayıtların asıl yeri yine bu cihaz (localStorage); uygulama internetsiz de çalışır.
 // Giriş yapılmışsa sync() iki iş yapar:
@@ -12,12 +12,20 @@
 import { supabase } from "./supabase";
 import {
   clearPending,
+  clearPendingProjects,
   loadPending,
+  loadPendingProjects,
+  loadProjectsOwner,
   loadSessions,
+  loadSubjectGoals,
+  loadSubjects,
   loadSyncOwner,
+  markPending,
+  markPendingProjects,
+  replaceProjects,
+  saveProjectsOwner,
   saveSessions,
   saveSyncOwner,
-  markPending,
 } from "./storage";
 import type { Session } from "./types";
 
@@ -70,7 +78,12 @@ export function sync(userId: string): Promise<SyncResult> {
   return running;
 }
 
-const snapshot = () => JSON.stringify([...loadSessions()].sort((a, b) => a.startedAt - b.startedAt));
+const snapshot = () =>
+  JSON.stringify([
+    [...loadSessions()].sort((a, b) => a.startedAt - b.startedAt),
+    loadSubjects(),
+    loadSubjectGoals(),
+  ]);
 
 async function doSync(userId: string): Promise<SyncResult> {
   const before = snapshot(); // sonda "bir şey değişti mi?" diye karşılaştırmak için
@@ -83,7 +96,7 @@ async function doSync(userId: string): Promise<SyncResult> {
     saveSyncOwner(userId);
   } else if (owner !== userId) {
     // Bu cihazda daha önce BAŞKA bir hesapla giriş yapılmış.
-    if (loadPending().length > 0) {
+    if (loadPending().length > 0 || loadPendingProjects().length > 0) {
       // Önceki hesabın yüklenmemiş kayıtları var: onları silmeyelim, yeni hesaba da karıştırmayalım.
       return {
         ok: false,
@@ -93,7 +106,16 @@ async function doSync(userId: string): Promise<SyncResult> {
     }
     // Önceki hesabın her şeyi zaten bulutta; bu cihazı yeni hesap için boşalt.
     saveSessions([]);
+    replaceProjects([], {});
     saveSyncOwner(userId);
+    saveProjectsOwner(userId);
+  }
+
+  // Projeler bu hesapla hiç eşitlenmediyse (ilk giriş ya da bu özellikten önce giriş yapılmış cihaz):
+  // bu cihazdaki tüm projeler ve hedefleri hesaba yüklensin.
+  if (loadProjectsOwner() !== userId) {
+    markPendingProjects(loadSubjects());
+    saveProjectsOwner(userId);
   }
 
   // --- 1) Yükle ---
@@ -137,12 +159,90 @@ async function doSync(userId: string): Promise<SyncResult> {
   const result = [...merged.values()].sort((a, b) => a.startedAt - b.startedAt);
 
   saveSessions(result);
+
+  // --- 3) Projeler ---
+  const projectError = await syncProjects(userId);
+  if (projectError) return { ok: false, changed: before !== snapshot(), error: projectError };
+
   return { ok: true, changed: before !== snapshot() };
 }
 
-function explain(error: { code?: string; message: string }): string {
+// ---------- Projeler ----------
+// Seanslarla aynı fikir: önce bekleyenleri yükle, sonra hesaptakini indirip birleştir.
+// Fark: proje "silinince" satır silinmez, deleted = true yazılır (öbür cihaz da öğrensin diye).
+
+interface ProjectRow {
+  user_id: string;
+  name: string;
+  weekly_goal_min: number | null;
+  position: number;
+  deleted: boolean;
+}
+
+/** Projeleri eşitler. Sorun olursa hata mesajını, yoksa undefined döner. */
+async function syncProjects(userId: string): Promise<string | undefined> {
+  // --- Yükle ---
+  const pending = loadPendingProjects();
+  if (pending.length > 0) {
+    const list = loadSubjects();
+    const goals = loadSubjectGoals();
+    const rows: ProjectRow[] = pending.map((name) => {
+      const index = list.indexOf(name);
+      return {
+        user_id: userId,
+        name,
+        weekly_goal_min: index >= 0 ? (goals[name] ?? null) : null,
+        position: Math.max(index, 0),
+        deleted: index < 0, // listede yoksa bu cihazda silinmiş (ya da adı değişmiş)
+      };
+    });
+    const { error } = await supabase.from("projects").upsert(rows, { onConflict: "user_id,name" });
+    if (error) return explain(error, "projects");
+    clearPendingProjects(pending);
+  }
+
+  // --- İndir ---
+  const remote: ProjectRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("projects")
+      .select("user_id, name, weekly_goal_min, position, deleted")
+      .eq("user_id", userId)
+      .order("position")
+      .order("name")
+      .range(from, from + 999);
+    if (error) return explain(error, "projects");
+    const rows = (data ?? []) as ProjectRow[];
+    remote.push(...rows);
+    if (rows.length < 1000) break;
+  }
+
+  // --- Birleştir ---
+  // Buluttaki hali esas; ama bu sırada değişmiş (hâlâ bekleyen) projelerde bu cihazdaki hal korunur.
+  const stillPending = new Set(loadPendingProjects());
+  const localList = loadSubjects();
+  const localGoals = loadSubjectGoals();
+
+  const list: string[] = [];
+  const goals: Record<string, number> = {};
+  for (const r of remote) {
+    if (r.deleted || stillPending.has(r.name)) continue;
+    list.push(r.name);
+    if (r.weekly_goal_min !== null) goals[r.name] = r.weekly_goal_min;
+  }
+  localList.forEach((name, index) => {
+    if (!stillPending.has(name)) return;
+    list.splice(Math.min(index, list.length), 0, name); // bu cihazdaki sırasına yerleştir
+    if (localGoals[name] !== undefined) goals[name] = localGoals[name];
+  });
+
+  replaceProjects(list, goals);
+  return undefined;
+}
+
+function explain(error: { code?: string; message: string }, table = "sessions"): string {
   if (error.code === "PGRST205" || error.code === "42P01")
-    return "Supabase'de 'sessions' tablosu yok. SQL'i SQL Editor'de çalıştırdın mı?";
+    return `Supabase'de '${table}' tablosu yok. SQL'i SQL Editor'de çalıştırdın mı?`;
   if (error.message.toLowerCase().includes("failed to fetch")) return "İnternete bağlanılamadı, sonra tekrar denenecek.";
   return error.message;
 }

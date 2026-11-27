@@ -1,6 +1,4 @@
-# Gazzla — devir notu
-
-Yeni bir sohbette kaldığın yerden devam etmek için bu dosyayı ve `src` klasörünü ver.
+# Gazzla — proje notu (Claude Code bu dosyayı her oturumda okur)
 
 ## Ben
 Ahmet, ETH öğrencisi. C++ biliyorum (Informatik 1), biraz Python. Kendimi yeni başlayan sayıyorum.
@@ -18,11 +16,11 @@ Klasör: `Belgeler\Gazzla\odak`, çalıştırma: `npm run dev` → http://localh
 | `src/main.ts` | Tüm ekranlar ve akış (zamanlayıcı, istatistik, projeler, sol menü, hesap, arkadaşlar) |
 | `src/timer.ts` | Geri sayım + duraklatma (bitiş anını tutar, arka planda kaymaz) |
 | `src/storage.ts` | localStorage: seanslar, ayarlar, projeler, proje hedefleri, istatistik hesapları, eşitleme yardımcıları |
-| `src/sync.ts` | Seansları Supabase ile eşitleme (önce cihaz, sonra bulut; "bekleyenler" listesi) |
+| `src/sync.ts` | Seansları ve proje listesini (hedefleriyle) Supabase ile eşitleme (önce cihaz, sonra bulut; "bekleyenler" listeleri) |
 | `src/supabase.ts` | Supabase bağlantısı + giriş (e-posta/şifre) |
 | `src/friends.ts` | Kullanıcı adı, arkadaşlık istekleri, arkadaş süreleri, "şu an çalışıyor" (presence) |
 | `src/hype.ts`, `src/effects.ts` | Gaz mesajları; konfeti, toast, ses |
-| `supabase/01_sessions.sql`, `02_friends.sql` | Supabase tabloları ve RLS kuralları (SQL Editor'de çalıştırıldı) |
+| `supabase/01_sessions.sql`, `02_friends.sql`, `03_projects.sql` | Supabase tabloları ve RLS kuralları (SQL Editor'de çalıştırılır) |
 
 ## Önemli kararlar
 - Arayüzde "ders" yerine **"proje"** deniyor (kodda değişken adları hâlâ `subject`).
@@ -31,11 +29,20 @@ Klasör: `Belgeler\Gazzla\odak`, çalıştırma: `npm run dev` → http://localh
 - Kayıtların asıl yeri cihaz (localStorage); giriş yapılmışsa arka planda Supabase'e eşitlenir.
 - **Proje adları arkadaşlardan gizli.** Arkadaşlar seans satırlarını okuyamaz; sadece `friend_totals()`
   fonksiyonundan toplam süreleri ve `presence` tablosundan "çalışıyor/arada/duraklattı" durumunu görür.
+- Projeler `projects` tablosunda, anahtar `(user_id, name)`. Silinen proje satırdan silinmez, `deleted = true`
+  olur (öbür cihaz da öğrensin diye); ad değiştirme = eski ad silindi + yeni ad. Bekleyen proje adları
+  `gazzla.pendingProjects`'te. İki cihaz internetsizken aynı projeyi değiştirirse son yükleyen kazanır.
 - Supabase: bölge Zürih, Site URL `http://localhost:5173` (yayınlayınca gerçek adres eklenmeli).
 
 ## Sırada
-1. Proje listesi ve hedeflerin de hesaba eşitlenmesi (şu an cihaza özel)
-2. Uygulamayı internette yayınlamak (Netlify/Vercel), Supabase'de Site URL'yi güncellemek
-3. PWA simgesi ve çevrimdışı çalışma (telefona "uygulama gibi" kurulsun)
-4. Ayarlar ekranı (isim, sabit süreler)
-5. Hedefin gerisinde kalınca hatırlatma bildirimi (uyku saatine kalan süre < kalan hedefin 2 katı)
+1. Uygulamayı internette yayınlamak (Netlify/Vercel), Supabase'de Site URL'yi güncellemek
+2. PWA simgesi ve çevrimdışı çalışma (telefona "uygulama gibi" kurulsun)
+3. Ayarlar ekranı (isim, sabit süreler)
+4. Hedefin gerisinde kalınca hatırlatma bildirimi (uyku saatine kalan süre < kalan hedefin 2 katı)
+
+## Çalışma kuralları (Claude için)
+- Her oturumda tek iş: kullanıcı "Sırada" listesinden bir madde seçer.
+- Sadece o iş için gereken dosyaları oku; tüm `src` klasörünü tarama. `node_modules` ve `dist` klasörlerine bakma.
+- Büyük bir değişiklikten önce kısa bir plan yaz, onay al, sonra kodla.
+- İş bitince bu dosyadaki "Sırada" listesini ve gerekirse "Önemli kararlar"ı güncelle.
+- `main.ts` çok büyük (~53 KB); ilgili bölümü bulmak için önce arama yap, dosyanın tamamını okuma.
