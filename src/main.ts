@@ -20,6 +20,7 @@ import {
   weekWorkMinutes,
   subjectGoal,
   setSubjectGoal,
+  GENERAL,
 } from "./storage";
 import { hype } from "./hype";
 import { chime, confetti, toast } from "./effects";
@@ -54,7 +55,8 @@ type Phase = "idle" | "work" | "break" | "askNext";
 const app = document.querySelector<HTMLElement>("#app")!;
 const settings = loadSettings();
 let phase: Phase = "idle";
-let view: "timer" | "stats" | "subjects" | "account" | "friends" = "timer";
+let view: "timer" | "stats" | "goals" | "subjects" | "account" | "friends" = "timer";
+let goalsEdit: string | undefined; // hedefler sayfasında düzenlenen: "daily", "weekly" ya da "p:<proje>"
 // Arkadaşlar
 let myProfile: Profile | null | undefined; // undefined = henüz yüklenmedi, null = kullanıcı adı yok
 let friendsData: FriendsOverview | undefined;
@@ -258,20 +260,30 @@ function updateGoalBars(extraMin = 0): void {
   }
 }
 
+/** Üst çubuktaki sade çizgi ikonlar (renk yazı renginden gelir, emoji gibi sırıtmaz). */
+const svgIcon = (body: string) =>
+  `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+const ICONS = {
+  menu: svgIcon('<path d="M4 7h16M4 12h16M4 17h10"/>'),
+  chart: svgIcon('<path d="M5 20V11M12 20V5M19 20v-6"/>'),
+  timer: svgIcon('<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2M10 3h4"/>'),
+};
+
 function headerHtml(): string {
   const streak = currentStreak(settings.dailyGoalMin);
   return `
     <header>
       <div class="header-left">
-        <button id="open-menu" class="icon big" title="Menü">☰</button>
+        <button id="open-menu" class="icon round" title="Menü" aria-label="Menü">${ICONS.menu}</button>
         <img class="logo-mark" src="/logo.svg" alt="" /><h1 class="logo">Gazzla</h1>
       </div>
       <div class="header-right">
         <div class="streak ${streak > 0 ? "on" : ""}" title="Üst üste hedef tutturduğun gün sayısı">
           🔥 ${streak} gün
         </div>
-        <button id="toggle-view" class="icon big" title="${view === "timer" ? "İstatistikler" : "Zamanlayıcı"}">
-          ${view === "timer" ? "📊" : "⏱️"}
+        <button id="toggle-view" class="icon round" title="${view === "timer" ? "İstatistikler" : "Zamanlayıcı"}"
+          aria-label="${view === "timer" ? "İstatistikler" : "Zamanlayıcı"}">
+          ${view === "timer" ? ICONS.chart : ICONS.timer}
         </button>
       </div>
     </header>`;
@@ -327,6 +339,7 @@ function goalHtml(): string {
       ${goalRowHtml("daily")}
       ${goalRowHtml("weekly")}
       ${subjectPart}
+      <button class="goal-more" data-open-goals>Tüm hedefler →</button>
     </section>`;
 }
 
@@ -341,8 +354,9 @@ function ringHtml(
       <svg viewBox="0 0 240 240" class="ring">
         <defs>
           <linearGradient id="grad-work" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#ff7a18" />
-            <stop offset="100%" stop-color="#ffd166" />
+            <stop offset="0%" stop-color="#7dd3fc" />
+            <stop offset="50%" stop-color="#6366f1" />
+            <stop offset="100%" stop-color="#ff7a18" />
           </linearGradient>
           <linearGradient id="grad-break" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stop-color="#10b981" />
@@ -367,6 +381,8 @@ function render(): void {
 
   if (view === "stats") {
     renderStats();
+  } else if (view === "goals") {
+    renderGoals();
   } else if (view === "subjects") {
     renderSubjects();
   } else if (view === "account") {
@@ -423,14 +439,8 @@ function render(): void {
       )}
       <p class="hype">${escapeHtml(hypeMessage)}</p>
       <p id="together" class="together"></p>
-      <section class="card form">
-        ${
-          settings.fixedDurations
-            ? ""
-            : `<label>Süre (dakika)
-                 <input id="minutes" type="number" min="1" value="${settings.defaultWorkMin}" />
-               </label>`
-        }
+      <section class="card form setup">
+        ${settings.fixedDurations ? "" : durationHtml()}
         ${focusSubject ? lockedSubjectHtml() : subjectPickerHtml()}
       </section>
       <div class="row">
@@ -459,6 +469,7 @@ function render(): void {
       askMinutes("work");
     });
     document.querySelector("#break")?.addEventListener("click", () => askMinutes("break"));
+    bindDuration();
   }
 
   document.querySelector("#toggle-view")!.addEventListener("click", () => {
@@ -484,18 +495,121 @@ function subjectPickerHtml(): string {
 
   const chip = (value: string, label: string) => {
     const selected = (currentSubject ?? "") === value;
-    return `<button class="chip ${selected ? "selected" : ""}" data-subject="${escapeHtml(value)}">${escapeHtml(label)}</button>`;
+    const dot = value
+      ? `<i class="chip-dot" style="--c:${projectColor(value)}"></i>`
+      : `<i class="chip-dot general"></i>`;
+    return `<button class="chip ${selected ? "selected" : ""}" data-subject="${escapeHtml(value)}">${dot}${escapeHtml(label)}</button>`;
   };
 
   return `
-    <div class="subject-picker">
-      <span class="picker-title">Ne için çalışıyorsun? <span class="muted">(isteğe bağlı)</span></span>
+    <div class="subject-picker setup-block">
+      <div class="setup-head">
+        <span class="setup-kicker">Proje</span>
+        <span class="setup-title">Ne için çalışıyorsun?</span>
+        <span class="setup-opt">isteğe bağlı</span>
+      </div>
       <div class="chips">
         ${chip("", "Genel")}
         ${subjects.map((s) => chip(s, s)).join("")}
-        <button id="new-project" class="chip add" title="Yeni proje ekle">+ Proje</button>
+        <button id="new-project" class="chip add" title="Yeni proje ekle">＋ Yeni proje</button>
       </div>
     </div>`;
+}
+
+/** Proje adından sabit bir renk (her proje hep aynı renkte görünsün). */
+function projectColor(name: string): string {
+  const palette = ["#7dd3fc", "#818cf8", "#c084fc", "#f472b6", "#ff9a3c", "#ffd166", "#34d399", "#60a5fa"];
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return palette[h % palette.length];
+}
+
+// ---------- Süre seçimi ----------
+
+const DURATION_PRESETS: { min: number; label: string }[] = [
+  { min: 15, label: "Isınma" },
+  { min: 25, label: "Klasik" },
+  { min: 45, label: "Derin" },
+  { min: 60, label: "Uzun" },
+  { min: 90, label: "Maraton" },
+];
+
+/** Süre kutusu: büyük sayı, − / + düğmeleri, hazır süreler ve altta teşvik satırı. */
+function durationHtml(): string {
+  const presets = DURATION_PRESETS.map(
+    (p) => `<button type="button" class="preset" data-min="${p.min}"><b>${p.min}</b><small>${p.label}</small></button>`,
+  ).join("");
+  return `
+    <div class="setup-block">
+      <div class="setup-head">
+        <span class="setup-kicker">Süre</span>
+        <span class="setup-title">Ne kadar odaklanacaksın?</span>
+      </div>
+      <div class="stepper">
+        <button type="button" class="step" data-step="-5" aria-label="5 dakika azalt">−</button>
+        <label class="stepper-value">
+          <input id="minutes" type="number" min="1" max="600" inputmode="numeric"
+                 value="${settings.defaultWorkMin}" aria-label="Süre (dakika)" />
+          <span>dakika</span>
+        </label>
+        <button type="button" class="step" data-step="5" aria-label="5 dakika artır">+</button>
+      </div>
+      <div class="presets">${presets}</div>
+      <p id="duration-hint" class="duration-hint"></p>
+    </div>`;
+}
+
+/** Süreye göre: seçili hazır süre, bitiş saati, hedefe katkı, düğmedeki yazı. */
+function updateDurationUi(): void {
+  const input = document.querySelector<HTMLInputElement>("#minutes");
+  if (!input) return;
+  const min = Math.max(0, Math.round(Number(input.value) || 0));
+  document
+    .querySelectorAll<HTMLButtonElement>(".preset")
+    .forEach((b) => b.classList.toggle("selected", Number(b.dataset.min) === min));
+
+  const work = document.querySelector<HTMLButtonElement>("#work");
+  if (work) work.textContent = min > 0 ? `Gazla · ${min} dk 🚀` : "Gazla 🚀";
+
+  const hint = document.querySelector<HTMLElement>("#duration-hint");
+  if (!hint) return;
+  if (min <= 0) {
+    hint.innerHTML = `<span class="muted">Bir süre seç, gerisi sende.</span>`;
+    return;
+  }
+  const end = new Date(Date.now() + min * 60_000);
+  const endText = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+  const { goal, done } = goalInfo("daily");
+  let goalText = "";
+  if (goal > 0) {
+    if (done >= goal) goalText = "Günlük hedef zaten cepte, bu seans bonus 🔥";
+    else if (done + min >= goal) goalText = "Bu seansla günlük hedefin tamam 🎯";
+    else goalText = `Bitince günlük hedefin <b>%${Math.round(((done + min) / goal) * 100)}</b>'i dolacak`;
+  }
+  hint.innerHTML = `<span>⏰ <b>${endText}</b>'de bitiyor</span>${goalText ? `<span>${goalText}</span>` : ""}`;
+}
+
+function bindDuration(): void {
+  const input = document.querySelector<HTMLInputElement>("#minutes");
+  if (!input) {
+    return;
+  }
+  input.addEventListener("input", updateDurationUi);
+  document.querySelectorAll<HTMLButtonElement>(".step").forEach((b) =>
+    b.addEventListener("click", () => {
+      const cur = Number(input.value) || 0;
+      const next = Math.min(600, Math.max(5, Math.round((cur + Number(b.dataset.step)) / 5) * 5));
+      input.value = String(next);
+      updateDurationUi();
+    }),
+  );
+  document.querySelectorAll<HTMLButtonElement>(".preset").forEach((b) =>
+    b.addEventListener("click", () => {
+      input.value = b.dataset.min!;
+      updateDurationUi();
+    }),
+  );
+  updateDurationUi();
 }
 
 /** Ders modunda seçici yerine: ders sabit, değiştirmek için menü. */
@@ -579,6 +693,7 @@ function openNewProjectModal(): void {
     render();
     const minutesInput = document.querySelector<HTMLInputElement>("#minutes");
     if (minutesInput && minutes) minutesInput.value = minutes;
+    updateDurationUi();
     toast(`${name} eklendi. Gazla!`);
   });
 }
@@ -631,6 +746,7 @@ function renderMenu(): void {
       ${running ? `<p class="muted small-note menu-empty">Seans sürerken proje değiştirilemez.</p>` : ""}
       <div class="menu-section"></div>
       <button class="menu-item" data-go="subjects" ${lock}>📚 Projeleri yönet</button>
+      <button class="menu-item ${view === "goals" ? "active" : ""}" data-go="goals">🎯 Hedefler</button>
       <button class="menu-item ${view === "stats" ? "active" : ""}" data-go="stats">📊 İstatistikler</button>
       <button class="menu-item ${view === "friends" ? "active" : ""}" data-go="friends">
         <span>👥 Arkadaşlar${friendsData?.incoming.length ? ` <span class="badge">${friendsData.incoming.length}</span>` : ""}</span>
@@ -664,6 +780,9 @@ function renderMenu(): void {
         view = "subjects";
       } else if (go === "stats") {
         view = "stats";
+      } else if (go === "goals") {
+        view = "goals";
+        goalsEdit = undefined;
       } else if (go === "account") {
         view = "account";
       } else if (go === "friends") {
@@ -720,6 +839,7 @@ async function runSync(showResult = false): Promise<void> {
     render();
     const input = document.querySelector<HTMLInputElement>("#minutes");
     if (input && minutes) input.value = minutes;
+    updateDurationUi();
   }
 }
 
@@ -1245,73 +1365,345 @@ function formatMinutes(min: number): string {
  * ve hedefi geçen günler yeşil olur (ders grafiğinde günlük hedef yok, verilmiyor).
  */
 function daysChartHtml(days: { label: string; minutes: number }[], goalMin?: number): string {
-  const maxDay = Math.max(goalMin ?? 1, ...days.map((d) => d.minutes));
-  const bars = days
+  const maxDay = Math.max(goalMin ?? 1, ...days.map((d) => d.minutes), 1);
+  const cols = days
     .map((d) => {
-      const pct = (d.minutes / maxDay) * 100;
+      const p = d.minutes / maxDay;
       const met = goalMin !== undefined && d.minutes >= goalMin;
+      const today = d.label === "Bugün";
       return `
-        <div class="day">
-          <div class="day-bar"><div class="day-fill ${met ? "met" : ""}" style="height:${pct}%"></div></div>
-          <span class="day-label">${d.label}</span>
-          <span class="day-min">${Math.round(d.minutes)}</span>
+        <div class="col ${met ? "met" : ""} ${today ? "today" : ""}">
+          <span class="col-val">${d.minutes > 0 ? Math.round(d.minutes) : ""}</span>
+          <div class="col-bar" style="height:calc((100% - 20px) * ${p.toFixed(4)})"></div>
         </div>`;
     })
     .join("");
+  const labels = days
+    .map((d) => `<span class="${d.label === "Bugün" ? "today" : ""}">${d.label}</span>`)
+    .join("");
   const goalLine =
     goalMin !== undefined
-      ? `<div class="goal-line" style="bottom:${40 + (goalMin / maxDay) * 100 * 1.2}px"><span>hedef</span></div>`
+      ? `<div class="chart-goal" style="bottom:calc((100% - 20px) * ${(goalMin / maxDay).toFixed(4)})"><span>hedef ${formatMinutes(goalMin)}</span></div>`
       : "";
-  return `<div class="days">${goalLine}${bars}</div>`;
+  return `
+    <div class="chart">
+      <div class="chart-cols">${goalLine}${cols}</div>
+      <div class="chart-labels">${labels}</div>
+    </div>`;
+}
+
+/** Sayfa başlığı: küçük üst yazı, büyük başlık, altında açıklama. */
+function pageHeadHtml(kicker: string, title: string, sub = ""): string {
+  return `
+    <section class="page-head">
+      <span class="setup-kicker">${kicker}</span>
+      <h2>${title}</h2>
+      ${sub ? `<p>${sub}</p>` : ""}
+    </section>`;
 }
 
 function renderStats(): void {
   const rows = statsBySubject();
   const days = lastSevenDays();
   const weekTotal = rows.reduce((sum, r) => sum + r.weekMin, 0);
-  const weekPct = Math.round((weekTotal / settings.weeklyGoalMin) * 100);
+  const weekPct = settings.weeklyGoalMin > 0 ? Math.round((weekTotal / settings.weeklyGoalMin) * 100) : 0;
   const allTotal = rows.reduce((sum, r) => sum + r.totalMin, 0);
+  const today = todayWorkMinutes();
+  const streak = currentStreak(settings.dailyGoalMin);
+  const sevenTotal = days.reduce((sum, d) => sum + d.minutes, 0);
+  const avg = Math.round(sevenTotal / 7);
+  const best = days.reduce((a, d) => (d.minutes > a.minutes ? d : a), days[0]);
+  const maxWeek = Math.max(1, ...rows.map((r) => r.weekMin));
 
+  const sub =
+    weekTotal > 0
+      ? `Haftalık hedefinin <b>%${weekPct}</b>'i tamam${weekPct >= 100 ? " — helal! 🎉" : ". Devam!"}`
+      : "Bu hafta henüz seans yok. İlk seansla grafiği doldur!";
 
-  const subjectRows = rows.length
+  const projectRows = rows.length
     ? rows
         .map(
           (r) => `
-        <tr>
-          <td>${escapeHtml(r.subject)}</td>
-          <td>${formatMinutes(r.todayMin)}</td>
-          <td>${formatMinutes(r.weekMin)}</td>
-          <td><strong>${formatMinutes(r.totalMin)}</strong></td>
-        </tr>`,
+        <li class="prow">
+          <i class="chip-dot" style="--c:${r.subject === GENERAL ? "#94a0b8" : projectColor(r.subject)}"></i>
+          <div class="prow-main">
+            <div class="prow-top">
+              <span class="prow-name">${escapeHtml(r.subject)}</span>
+              <strong>${formatMinutes(r.weekMin)}</strong>
+            </div>
+            <div class="bar thin"><div class="fill" style="width:${(r.weekMin / maxWeek) * 100}%;background:${r.subject === GENERAL ? "#94a0b8" : projectColor(r.subject)}"></div></div>
+            <div class="prow-sub">bugün ${formatMinutes(r.todayMin)} · toplam ${formatMinutes(r.totalMin)}</div>
+          </div>
+        </li>`,
         )
         .join("")
-    : `<tr><td colspan="4" class="muted">Henüz kayıt yok. İlk seansı başlat!</td></tr>`;
+    : `<li class="empty muted">Henüz kayıt yok. İlk seansı başlat!</li>`;
 
   app.innerHTML = `
     ${headerHtml()}
-    <section class="card totals">
-      <div>
-        <span class="muted">Bu hafta</span>
-        <strong>${formatMinutes(weekTotal)}</strong>
-        <span class="muted small-note">hedefin %${weekPct}'i ${weekPct >= 100 ? "✅" : ""}</span>
-      </div>
-      <div><span class="muted">Duraklatma (hafta)</span><strong>${weekPauseCount()} kez</strong></div>
-      <div><span class="muted">Toplam</span><strong>${formatMinutes(allTotal)}</strong></div>
+    ${pageHeadHtml("İstatistikler", `Bu hafta <span class="grad-text">${formatMinutes(weekTotal)}</span>`, sub)}
+    <section class="kpis">
+      <div class="kpi"><span>Bugün</span><strong>${formatMinutes(today)}</strong>
+        <small>${settings.dailyGoalMin > 0 ? `hedef ${formatMinutes(settings.dailyGoalMin)}` : ""}</small></div>
+      <div class="kpi"><span>Bu hafta</span><strong>${formatMinutes(weekTotal)}</strong>
+        <div class="bar thin"><div class="fill" style="width:${Math.min(100, weekPct)}%"></div></div></div>
+      <div class="kpi"><span>Seri</span><strong>${streak} gün</strong>
+        <small>${streak > 0 ? "🔥 bozma!" : "bugün başlat"}</small></div>
+      <div class="kpi"><span>Toplam</span><strong>${formatMinutes(allTotal)}</strong>
+        <small>${weekPauseCount()} duraklatma bu hafta</small></div>
     </section>
     <section class="card">
-      <div class="card-title">Son 7 gün <span class="muted">(dk)</span></div>
+      <div class="card-head">
+        <div class="card-title">Son 7 gün</div>
+        <span class="muted card-meta">ort. ${formatMinutes(avg)}/gün${best && best.minutes > 0 ? ` · en iyi: ${best.label}` : ""}</span>
+      </div>
       ${daysChartHtml(days, settings.dailyGoalMin)}
     </section>
     <section class="card">
-      <div class="card-title">Projelere göre</div>
-      <table class="subjects">
-        <thead><tr><th>Proje</th><th>Bugün</th><th>Hafta</th><th>Toplam</th></tr></thead>
-        <tbody>${subjectRows}</tbody>
-      </table>
+      <div class="card-head">
+        <div class="card-title">Projelere göre</div>
+        <span class="muted card-meta">bu hafta</span>
+      </div>
+      <ul class="prows">${projectRows}</ul>
     </section>`;
 }
 
+// ---------- Hedefler sayfası ----------
+
+/** Küçük dairesel ilerleme göstergesi (yüzde ortada). */
+function miniRingHtml(pct: number, met: boolean): string {
+  const c = 2 * Math.PI * 42;
+  const off = c * (1 - Math.min(1, pct / 100));
+  return `
+    <div class="mini-ring ${met ? "met" : ""}">
+      <svg viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="grad-mini" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#7dd3fc" /><stop offset="50%" stop-color="#6366f1" /><stop offset="100%" stop-color="#ff7a18" />
+          </linearGradient>
+          <linearGradient id="grad-mini-met" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#10b981" /><stop offset="100%" stop-color="#60a5fa" />
+          </linearGradient>
+        </defs>
+        <circle cx="50" cy="50" r="42" class="mr-track" />
+        <circle cx="50" cy="50" r="42" class="mr-bar" stroke-dasharray="${c}" stroke-dashoffset="${off}" />
+      </svg>
+      <span>${met ? "✓" : `%${Math.round(pct)}`}</span>
+    </div>`;
+}
+
+/** Hedef düzenleme kutusu. unit: "dk" ya da "sa" (haftalık hedefler saat olarak yazılır). */
+function goalEditorHtml(key: string, currentMin: number, unit: "dk" | "sa", presets: number[], canRemove: boolean): string {
+  const value = unit === "sa" ? Math.round((currentMin / 60) * 10) / 10 : currentMin;
+  return `
+    <div class="goal-editor" data-key="${escapeHtml(key)}">
+      <div class="stepper small">
+        <label class="stepper-value">
+          <input id="goals-input" type="number" min="0.5" step="${unit === "sa" ? "0.5" : "5"}" inputmode="decimal" value="${value || ""}" />
+          <span>${unit === "sa" ? "saat" : "dakika"}</span>
+        </label>
+      </div>
+      <div class="presets">
+        ${presets
+          .map((v) => `<button type="button" class="preset ${v === value ? "selected" : ""}" data-v="${v}"><b>${v}</b><small>${unit}</small></button>`)
+          .join("")}
+      </div>
+      <div class="row">
+        ${canRemove ? `<button class="small ghost danger-text" id="goals-remove">Hedefi kaldır</button>` : ""}
+        <button class="small ghost" id="goals-cancel">Vazgeç</button>
+        <button class="small primary" id="goals-save" data-unit="${unit}">Kaydet</button>
+      </div>
+    </div>`;
+}
+
+function remainingText(done: number, goal: number, met: boolean): string {
+  if (goal <= 0) return "";
+  if (met) return `Hedef tamam, <b>+${formatMinutes(done - goal)}</b> bonus`;
+  return `Hedefe <b>${formatMinutes(goal - done)}</b> kaldı`;
+}
+
+function renderGoals(): void {
+  const daily = goalInfo("daily");
+  const weekly = goalInfo("weekly");
+  const dailyMet = daily.goal > 0 && daily.done >= daily.goal;
+  const weeklyMet = weekly.goal > 0 && weekly.done >= weekly.goal;
+  const dailyPct = daily.goal > 0 ? (daily.done / daily.goal) * 100 : 0;
+  const weeklyPct = weekly.goal > 0 ? (weekly.done / weekly.goal) * 100 : 0;
+  const streak = currentStreak(settings.dailyGoalMin);
+
+  // Haftanın kalan günleri (bugün dahil; hafta pazartesi başlar).
+  const daysLeft = 7 - ((new Date().getDay() + 6) % 7);
+  const perDay = Math.ceil(Math.max(0, weekly.goal - weekly.done) / daysLeft);
+
+  let sub: string;
+  if (dailyMet && weeklyMet) sub = "Bugünün ve haftanın hedefi cepte. Gerisi bonus! 🏆";
+  else if (dailyMet) sub = "Bugünkü hedef tamam 🎯 Haftalık hedef için böyle devam.";
+  else if (daily.done > 0) sub = `İyi gidiyorsun! Bugün için <b>${formatMinutes(daily.goal - daily.done)}</b> daha.`;
+  else sub = "Bugün henüz başlamadın. Bir seans, ve çubuklar dolmaya başlar.";
+
+  const tile = (kind: "daily" | "weekly") => {
+    const info = kind === "daily" ? daily : weekly;
+    const met = kind === "daily" ? dailyMet : weeklyMet;
+    const pct = kind === "daily" ? dailyPct : weeklyPct;
+    const editing = goalsEdit === kind;
+    return `
+      <article class="goal-tile ${met ? "met" : ""}">
+        <div class="goal-tile-main">
+          ${miniRingHtml(pct, met)}
+          <div class="goal-tile-body">
+            <span class="setup-kicker">${kind === "daily" ? "Bugün" : "Bu hafta"} · hedef ${formatMinutes(info.goal)}</span>
+            <div class="goal-tile-nums"><strong>${formatMinutes(info.done)}</strong></div>
+            <span class="goal-tile-left">${remainingText(info.done, info.goal, met)}</span>
+          </div>
+          ${editing ? "" : `<button class="icon goal-tile-edit" data-gedit="${kind}" title="Hedefi değiştir">✎</button>`}
+        </div>
+        ${
+          editing
+            ? kind === "daily"
+              ? goalEditorHtml("daily", info.goal, "dk", [60, 120, 180, 240, 300], false)
+              : goalEditorHtml("weekly", info.goal, "sa", [5, 10, 15, 20, 30], false)
+            : ""
+        }
+      </article>`;
+  };
+
+  const subjects = loadSubjects();
+  const projectItems = subjects.length
+    ? subjects
+        .map((name) => {
+          const goal = subjectGoal(name);
+          const done = weekWorkMinutes(name);
+          const key = `p:${name}`;
+          const editing = goalsEdit === key;
+          const met = goal !== undefined && done >= goal;
+          const pct = goal ? Math.min(100, (done / goal) * 100) : 0;
+          return `
+          <li class="pgoal ${met ? "met" : ""}">
+            <div class="pgoal-row">
+              <i class="chip-dot" style="--c:${projectColor(name)}"></i>
+              <div class="prow-main">
+                <div class="prow-top">
+                  <span class="prow-name">${escapeHtml(name)} ${met ? "✅" : ""}</span>
+                  <span class="pgoal-nums">${goal !== undefined ? `<b>${formatMinutes(done)}</b> / ${formatMinutes(goal)}` : `<span class="muted">${done > 0 ? `${formatMinutes(done)} · ` : ""}hedef yok</span>`}</span>
+                </div>
+                ${goal !== undefined ? `<div class="bar thin"><div class="fill" style="width:${pct}%"></div></div>` : ""}
+              </div>
+              ${
+                editing
+                  ? ""
+                  : goal !== undefined
+                    ? `<button class="icon" data-gedit="${escapeHtml(key)}" title="Hedefi değiştir">✎</button>`
+                    : `<button class="small ghost" data-gedit="${escapeHtml(key)}">+ Hedef</button>`
+              }
+            </div>
+            ${editing ? goalEditorHtml(key, goal ?? 300, "sa", [2, 4, 6, 8, 10], goal !== undefined) : ""}
+          </li>`;
+        })
+        .join("")
+    : `<li class="empty muted">Henüz proje yok. Ana ekranda "＋ Yeni proje" ile ekleyebilirsin.</li>`;
+
+  app.innerHTML = `
+    ${headerHtml()}
+    ${pageHeadHtml("Hedefler", dailyMet ? `Bugün <span class="grad-text">kazandın.</span>` : `Hedefine <span class="grad-text">%${Math.round(dailyPct)}</span> yakınsın.`, sub)}
+    <section class="goal-tiles">
+      ${tile("daily")}
+      ${tile("weekly")}
+    </section>
+    <section class="insights">
+      <div class="insight"><span>🔥</span><div><b>${streak} gün</b><small>üst üste günlük hedef</small></div></div>
+      <div class="insight"><span>📅</span><div><b>${weeklyMet ? "Tamam!" : `${formatMinutes(perDay)}/gün`}</b><small>${weeklyMet ? "haftalık hedef cepte" : `kalan ${daysLeft} günde haftalık hedef için`}</small></div></div>
+    </section>
+    <section class="card">
+      <div class="card-head">
+        <div class="card-title">Proje hedefleri</div>
+        <span class="muted card-meta">haftalık · isteğe bağlı</span>
+      </div>
+      <ul class="prows">${projectItems}</ul>
+    </section>
+    <button class="primary" id="goals-start">Hedefe gazla 🚀</button>`;
+
+  document.querySelectorAll<HTMLButtonElement>("[data-gedit]").forEach((b) =>
+    b.addEventListener("click", () => {
+      goalsEdit = b.dataset.gedit;
+      render();
+      const input = document.querySelector<HTMLInputElement>("#goals-input");
+      input?.focus();
+      input?.select();
+    }),
+  );
+  document.querySelector("#goals-start")?.addEventListener("click", () => {
+    view = "timer";
+    goalsEdit = undefined;
+    render();
+  });
+
+  const editor = document.querySelector<HTMLElement>(".goal-editor");
+  if (!editor) return;
+  const key = editor.dataset.key!;
+  const input = editor.querySelector<HTMLInputElement>("#goals-input")!;
+  const syncPresets = () =>
+    editor
+      .querySelectorAll<HTMLButtonElement>(".preset")
+      .forEach((p) => p.classList.toggle("selected", Number(p.dataset.v) === Number(input.value)));
+  input.addEventListener("input", syncPresets);
+  editor.querySelectorAll<HTMLButtonElement>(".preset").forEach((p) =>
+    p.addEventListener("click", () => {
+      input.value = p.dataset.v!;
+      syncPresets();
+    }),
+  );
+  const close = () => {
+    goalsEdit = undefined;
+    render();
+  };
+  editor.querySelector("#goals-cancel")?.addEventListener("click", close);
+  editor.querySelector("#goals-remove")?.addEventListener("click", () => {
+    const name = key.slice(2);
+    setSubjectGoal(name, undefined);
+    runSync();
+    toast(`${name} için hedef kaldırıldı.`);
+    close();
+  });
+  const save = () => {
+    const unit = editor.querySelector<HTMLButtonElement>("#goals-save")!.dataset.unit;
+    const raw = Number(input.value);
+    const minutes = Math.round(unit === "sa" ? raw * 60 : raw);
+    if (!minutes || minutes <= 0) {
+      toast("Hedef en az 1 dakika olmalı.");
+      return;
+    }
+    if (key === "daily") {
+      settings.dailyGoalMin = minutes;
+      saveSettings(settings);
+      toast(`Yeni günlük hedef: ${formatMinutes(minutes)}. Gazla!`);
+    } else if (key === "weekly") {
+      settings.weeklyGoalMin = minutes;
+      saveSettings(settings);
+      toast(`Yeni haftalık hedef: ${formatMinutes(minutes)}. Gazla!`);
+    } else {
+      const name = key.slice(2);
+      setSubjectGoal(name, minutes);
+      runSync();
+      toast(`${name} için haftalık hedef: ${formatMinutes(minutes)}. Gazla!`);
+    }
+    close();
+  };
+  editor.querySelector("#goals-save")?.addEventListener("click", save);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") save();
+    if (e.key === "Escape") close();
+  });
+}
+
 function bindGoalEditing(): void {
+  document.querySelectorAll("[data-open-goals]").forEach((b) =>
+    b.addEventListener("click", () => {
+      view = "goals";
+      goalsEdit = undefined;
+      editingGoal = undefined;
+      render();
+    }),
+  );
   document.querySelectorAll<HTMLButtonElement>(".goal-edit-btn").forEach((btn) =>
     btn.addEventListener("click", () => {
       editingGoal = btn.dataset.goal as GoalKind;

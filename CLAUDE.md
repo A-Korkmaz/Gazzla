@@ -15,7 +15,7 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 ## Dosyalar
 | Dosya | Ne yapar |
 |---|---|
-| `src/main.ts` (~55 KB) | Tüm ekranlar ve akış (zamanlayıcı, istatistik, projeler, sol menü, hesap, arkadaşlar) |
+| `src/main.ts` (~70 KB) | Tüm ekranlar ve akış (zamanlayıcı + süre seçici, istatistik, hedefler, projeler, sol menü, hesap, arkadaşlar) |
 | `src/timer.ts` | Geri sayım + duraklatma (bitiş anını tutar, arka planda kaymaz) |
 | `src/storage.ts` | localStorage: seanslar, ayarlar, projeler, proje hedefleri, istatistik hesapları, eşitleme yardımcıları |
 | `src/sync.ts` | Seansları ve proje listesini (hedefleriyle) Supabase ile eşitleme (önce cihaz, sonra bulut; "bekleyenler" listeleri) |
@@ -30,6 +30,10 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 ## Önemli kararlar
 - Arayüzde "ders" yerine **"proje"** deniyor (kodda değişken adları hâlâ `subject`).
 - Proje hedefi **isteğe bağlı** (haftalık).
+- Görünüm giriş sayfasıyla aynı dilde: koyu zemin + süzülen mavi/mor lekeler, cam kartlar, hap düğmeler,
+  vurgu rengi mor-mavi (`--accent`), ana düğme turuncu. Üst çubukta emoji yerine çizgi SVG ikonlar (`ICONS`).
+- Hedefler ayrı sayfada (`view = "goals"`): günlük, haftalık ve proje hedefleri orada düzenlenir.
+  Haftalık ve proje hedefleri saat olarak girilir, dakika olarak saklanır.
 - Giriş **zorunlu değil**; uygulama girişsiz de çalışır.
 - Kayıtların asıl yeri cihaz (localStorage); giriş yapılmışsa arka planda Supabase'e eşitlenir.
 - **Proje adları arkadaşlardan gizli.** Arkadaşlar seans satırlarını okuyamaz; sadece `friend_totals()`
@@ -42,7 +46,7 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 
 ## Durum (son güncelleme 2026-11-27)
 - Bitti: seans eşitlemesi, arkadaşlar, proje listesi + hedeflerin eşitlenmesi (canlı sitede iki cihazla test edildi),
-  internette yayın (Netlify), giriş (tanıtım) sayfası (2026-11-27).
+  internette yayın (Netlify), giriş (tanıtım) sayfası, yeni görünüm + hedefler sayfası (2026-11-27).
 - Açık küçük kontrol: Supabase → Authentication → URL Configuration → **Site URL** hâlâ `http://localhost:5173`
   olabilir; `https://gazzla-08t7.netlify.app` olmalı (yoksa arkadaşların kayıt onay e-postası localhost'a gider).
 - Bulutta `__test__` ve `__test2__` adlı iki `deleted = true` test satırı var; zararsız.
@@ -57,7 +61,7 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 - Sadece o iş için gereken dosyaları oku; tüm `src` klasörünü tarama. `node_modules` ve `dist` klasörlerine bakma.
 - Büyük bir değişiklikten önce kısa bir plan yaz, onay al, sonra kodla.
 - İş bitince bu dosyadaki "Sırada" listesini ve gerekirse "Önemli kararlar"ı güncelle.
-- `main.ts` çok büyük (~55 KB); ilgili bölümü bulmak için önce arama yap, dosyanın tamamını okuma.
+- `main.ts` çok büyük (~70 KB); ilgili bölümü bulmak için önce arama yap, dosyanın tamamını okuma.
 - İşi **yarım bırakma**: plan onaylandıktan sonra kodla, `npm run build` ile doğrula, test et, commit et ve
   `main`'e gönder. Ahmet her ara adımda tekrar onay istenmesinden hoşlanmıyor.
 - Dikkat: `main`'e push = canlı sitede yayın (arkadaşlar da kullanıyor). Bu yüzden önce ayrı dalda çalış,

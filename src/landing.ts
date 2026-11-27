@@ -237,7 +237,8 @@ export function openLanding(): void {
 
   // Üst çubuk kayınca arka planı koyulaşsın.
   const nav = root.querySelector<HTMLElement>(".lp-nav")!;
-  root.addEventListener("scroll", () => nav.classList.toggle("scrolled", root!.scrollTop > 20), {
+  const el = root; // kapanırken root null olur; kaydırma olayı yine de gelebilir
+  el.addEventListener("scroll", () => nav.classList.toggle("scrolled", el.scrollTop > 20), {
     passive: true,
   });
 
