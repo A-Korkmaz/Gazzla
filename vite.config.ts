@@ -9,7 +9,7 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 
 const AI_URL = "https://api.groq.com/openai/v1/chat/completions";
-const AI_MODEL = "llama-3.3-70b-versatile";
+const AI_MODEL = "openai/gpt-oss-120b"; // listeyi görmek için: GET https://api.groq.com/openai/v1/models
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -43,7 +43,14 @@ function gazzlaAi(key: string | undefined): Plugin {
           upstream = await fetch(AI_URL, {
             method: "POST",
             headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ model: AI_MODEL, messages, stream: true, temperature: 0.7, max_tokens: 1024 }),
+            body: JSON.stringify({
+              model: AI_MODEL,
+              messages,
+              stream: true,
+              temperature: 0.7,
+              max_tokens: 2048, // düşünme payı da buna dahil
+              reasoning_effort: "low", // kısa düşün, hızlı cevap ver
+            }),
           });
         } catch {
           return fail(502, "network");

@@ -30,7 +30,7 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 | `src/timetableView.ts` | Program sayfası (haftalık tablo, blok penceresi, "Plan ve gerçek" kartı) + zamanlayıcıdaki "Programda şimdi" kartı. main.ts'ten `TimetableCtx` ile çağrılır |
 | `supabase/01_sessions.sql`, `02_friends.sql`, `03_projects.sql`, `04_timetable.sql`, `05_google.sql` | Supabase tabloları ve RLS kuralları. **01–05 SQL Editor'de çalıştırıldı**; tekrar çalıştırma (`create policy` hata verir). `google_tokens`'ta bilerek hiç kural yok (yalnız sunucu fonksiyonu erişir). Yeni tablo → `06_...sql` |
 | `src/assistant.ts` | "Gazzla AI" sohbet sayfası (`view = "assistant"`, menüde yalnız `npm run dev`'de). Kullanıcı verisini `assistantContext()` (main.ts) düz metin yapar, system prompt'la `/api/ai`'ye yollar, cevabı parça parça yazar. Sohbet kaydedilmez |
-| `vite.config.ts` | Yalnız dev sunucusunda `/api/ai` aracısı: `.env.local`'deki `GROQ_API_KEY`'i ekleyip Groq'a (`llama-3.3-70b-versatile`) iletir, cevabın sadece yazısını döndürür (servis/model adı tarayıcıya gitmez) |
+| `vite.config.ts` | Yalnız dev sunucusunda `/api/ai` aracısı: `.env.local`'deki `GROQ_API_KEY`'i ekleyip Groq'a (`openai/gpt-oss-120b`, düşünme "low") iletir, cevabın sadece yazısını döndürür (servis/model adı tarayıcıya gitmez) |
 | `public/gizlilik.html` | Gizlilik sayfası (düz HTML, Türkçe + kısa İngilizce). Google izin ekranındaki privacy policy bağlantısı buraya gider; veri kullanımı değişirse güncelle |
 | `public/manifest.webmanifest` | PWA bilgisi (ad, renkler, simgeler). Service worker **yok** |
 | `public/logo.svg`, `public/icons/` | Logo (favicon + üst çubuk/menü) ve PNG simgeler: 192, 512, maskable-512 (logo küçültülmüş), apple-touch-icon 180 (köşesiz). PNG'ler logo.svg'den Edge headless ile üretildi; logo değişirse yeniden üret |
@@ -107,7 +107,7 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
    Gizlilik sayfası canlıya bu dalla birlikte çıkar.
    Ahmet "tamam" demeden commit/push yok. Ahmet'in hesabında test projeleri/blokları duruyor (önemsiz dedi).
 1. Gazzla AI'yı canlıya almak (isteğe bağlı): anahtar Supabase Edge Function'a (`gcal-auth` gibi), giriş şartı,
-   kişi başı günlük sınır. Dal `ai` (localhost sürümü, commitlendi). Gerçek anahtarla cevap testi Ahmet anahtarı koyunca yapılacak
+   kişi başı günlük sınır. Dal `ai` (localhost sürümü, commitlendi). Gerçek anahtarla test geçti (2026-11-27)
 2. Çevrimdışı çalışma (service worker) — simgeler hazır (2026-11-27), telefona kurulunca logolu görünür
 3. Ayarlar ekranı (isim, sabit süreler)
 4. Hedefin gerisinde kalınca hatırlatma bildirimi (uyku saatine kalan süre < kalan hedefin 2 katı)
