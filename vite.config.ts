@@ -7,6 +7,7 @@
 // Anahtar `.env.local` dosyasında: GROQ_API_KEY=... (bu dosya .gitignore'da, GitHub'a gitmez).
 
 import { defineConfig, loadEnv, type Plugin } from "vite";
+import { studyRoutes } from "./server/gemini";
 
 const AI_URL = "https://api.groq.com/openai/v1/chat/completions";
 const AI_MODEL = "openai/gpt-oss-120b"; // listeyi görmek için: GET https://api.groq.com/openai/v1/models
@@ -16,11 +17,14 @@ const TRANSCRIBE_MODEL = "whisper-large-v3-turbo"; // ses → yazı, dili kendis
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-function gazzlaAi(key: string | undefined): Plugin {
+function gazzlaAi(key: string | undefined, studyKey: string | undefined, studyModel: string | undefined): Plugin {
   return {
     name: "gazzla-ai",
     apply: "serve", // yalnız geliştirme sunucusunda; derlenmiş siteye girmez
     configureServer(server) {
+      // "Ders asistanı" modu: server/gemini.ts (anahtar GEMINI_API_KEY).
+      studyRoutes(server.middlewares, studyKey, studyModel);
+
       server.middlewares.use("/api/ai", async (req, res) => {
         const fail = (status: number, error: string) => {
           res.statusCode = status;
@@ -160,5 +164,5 @@ function gazzlaAi(key: string | undefined): Plugin {
 export default defineConfig(({ mode }) => {
   // Üçüncü değer "" → VITE_ ile başlamayan değişkenleri de oku. Bunlar tarayıcıya hiç gönderilmez.
   const env = loadEnv(mode, process.cwd(), "");
-  return { plugins: [gazzlaAi(env.GROQ_API_KEY)] };
+  return { plugins: [gazzlaAi(env.GROQ_API_KEY, env.GEMINI_API_KEY, env.GEMINI_MODEL)] };
 });
