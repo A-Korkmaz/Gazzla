@@ -3,7 +3,8 @@
 ## Ben
 Ahmet, ETH öğrencisi. C++ biliyorum (Informatik 1), biraz Python. Kendimi yeni başlayan sayıyorum.
 Türkçe konuşalım, teknik şeyleri C++ benzetmeleriyle anlat, adımları **teker teker** ver.
-Windows + VS Code + Node.js v24. Telefonum Android, arkadaşlarımın bazılarında iPhone var.
+Windows + VS Code + Node.js v24. Tarayıcım **Edge** (Chrome'da Claude uzantısı yok). Telefonum Android,
+arkadaşlarımın bazılarında iPhone var.
 
 ## Proje
 Focus To-Do benzeri, kendime ve birkaç arkadaşıma özel çalışma zamanlayıcısı (piyasaya sürülmeyecek).
@@ -14,14 +15,15 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 ## Dosyalar
 | Dosya | Ne yapar |
 |---|---|
-| `src/main.ts` | Tüm ekranlar ve akış (zamanlayıcı, istatistik, projeler, sol menü, hesap, arkadaşlar) |
+| `src/main.ts` (~55 KB) | Tüm ekranlar ve akış (zamanlayıcı, istatistik, projeler, sol menü, hesap, arkadaşlar) |
 | `src/timer.ts` | Geri sayım + duraklatma (bitiş anını tutar, arka planda kaymaz) |
 | `src/storage.ts` | localStorage: seanslar, ayarlar, projeler, proje hedefleri, istatistik hesapları, eşitleme yardımcıları |
 | `src/sync.ts` | Seansları ve proje listesini (hedefleriyle) Supabase ile eşitleme (önce cihaz, sonra bulut; "bekleyenler" listeleri) |
 | `src/supabase.ts` | Supabase bağlantısı + giriş (e-posta/şifre) |
 | `src/friends.ts` | Kullanıcı adı, arkadaşlık istekleri, arkadaş süreleri, "şu an çalışıyor" (presence) |
 | `src/hype.ts`, `src/effects.ts` | Gaz mesajları; konfeti, toast, ses |
-| `supabase/01_sessions.sql`, `02_friends.sql`, `03_projects.sql` | Supabase tabloları ve RLS kuralları (SQL Editor'de çalıştırılır) |
+| `supabase/01_sessions.sql`, `02_friends.sql`, `03_projects.sql` | Supabase tabloları ve RLS kuralları. **Üçü de SQL Editor'de çalıştırıldı**; tekrar çalıştırma (`create policy` hata verir). Yeni tablo → `04_...sql` |
+| `public/manifest.webmanifest` | PWA bilgisi (ad, renkler). `icons` listesi **boş**; service worker **yok** |
 
 ## Önemli kararlar
 - Arayüzde "ders" yerine **"proje"** deniyor (kodda değişken adları hâlâ `subject`).
@@ -33,7 +35,15 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 - Projeler `projects` tablosunda, anahtar `(user_id, name)`. Silinen proje satırdan silinmez, `deleted = true`
   olur (öbür cihaz da öğrensin diye); ad değiştirme = eski ad silindi + yeni ad. Bekleyen proje adları
   `gazzla.pendingProjects`'te. İki cihaz internetsizken aynı projeyi değiştirirse son yükleyen kazanır.
-- Supabase: bölge Zürih. Site URL'nin canlı adres olduğunu kontrol et (e-posta onay bağlantıları oraya gider).
+- Supabase: bölge Zürih. Proje adresi `oeloqmdhffbehavolwik.supabase.co`.
+- Netlify ayarları (derleme komutu, `dist`) Netlify panelinde; projede `netlify.toml` yok.
+
+## Durum (son güncelleme 2026-11-27)
+- Bitti: seans eşitlemesi, arkadaşlar, proje listesi + hedeflerin eşitlenmesi (canlı sitede iki cihazla test edildi),
+  internette yayın (Netlify).
+- Açık küçük kontrol: Supabase → Authentication → URL Configuration → **Site URL** hâlâ `http://localhost:5173`
+  olabilir; `https://gazzla-08t7.netlify.app` olmalı (yoksa arkadaşların kayıt onay e-postası localhost'a gider).
+- Bulutta `__test__` ve `__test2__` adlı iki `deleted = true` test satırı var; zararsız.
 
 ## Sırada
 1. PWA simgesi ve çevrimdışı çalışma (telefona "uygulama gibi" kurulsun)
@@ -45,4 +55,12 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 - Sadece o iş için gereken dosyaları oku; tüm `src` klasörünü tarama. `node_modules` ve `dist` klasörlerine bakma.
 - Büyük bir değişiklikten önce kısa bir plan yaz, onay al, sonra kodla.
 - İş bitince bu dosyadaki "Sırada" listesini ve gerekirse "Önemli kararlar"ı güncelle.
-- `main.ts` çok büyük (~53 KB); ilgili bölümü bulmak için önce arama yap, dosyanın tamamını okuma.
+- `main.ts` çok büyük (~55 KB); ilgili bölümü bulmak için önce arama yap, dosyanın tamamını okuma.
+- İşi **yarım bırakma**: plan onaylandıktan sonra kodla, `npm run build` ile doğrula, test et, commit et ve
+  `main`'e gönder. Ahmet her ara adımda tekrar onay istenmesinden hoşlanmıyor.
+- Dikkat: `main`'e push = canlı sitede yayın (arkadaşlar da kullanıyor). Bu yüzden önce ayrı dalda çalış,
+  derleme ve test geçince `main`'e birleştirip gönder.
+- Test: Claude'un kendi tarayıcı panelinde canlı siteyi aç; Ahmet panelde giriş yapar (şifreyi Claude girmez).
+  Buluta gerçekten yazıldığını sayfadan Supabase REST'e sorarak kontrol et. "Başka cihaz"ı taklit etmek için
+  paneldeki localStorage'ı o cihazın durumuna getirip sayfayı yenile.
+- Bilgisayarda `gh` (GitHub CLI) yok; `git` ve `python` var.
