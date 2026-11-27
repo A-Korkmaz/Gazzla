@@ -23,7 +23,8 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 | `src/friends.ts` | Kullanıcı adı, arkadaşlık istekleri, arkadaş süreleri, "şu an çalışıyor" (presence) |
 | `src/hype.ts`, `src/effects.ts` | Gaz mesajları; konfeti, toast, ses |
 | `supabase/01_sessions.sql`, `02_friends.sql`, `03_projects.sql` | Supabase tabloları ve RLS kuralları. **Üçü de SQL Editor'de çalıştırıldı**; tekrar çalıştırma (`create policy` hata verir). Yeni tablo → `04_...sql` |
-| `public/manifest.webmanifest` | PWA bilgisi (ad, renkler). `icons` listesi **boş**; service worker **yok** |
+| `public/manifest.webmanifest` | PWA bilgisi (ad, renkler, simgeler). Service worker **yok** |
+| `public/logo.svg`, `public/icons/` | Logo (favicon + üst çubuk/menü) ve PNG simgeler: 192, 512, maskable-512 (logo küçültülmüş), apple-touch-icon 180 (köşesiz). PNG'ler logo.svg'den Edge headless ile üretildi; logo değişirse yeniden üret |
 
 ## Önemli kararlar
 - Arayüzde "ders" yerine **"proje"** deniyor (kodda değişken adları hâlâ `subject`).
@@ -46,7 +47,7 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 - Bulutta `__test__` ve `__test2__` adlı iki `deleted = true` test satırı var; zararsız.
 
 ## Sırada
-1. PWA simgesi ve çevrimdışı çalışma (telefona "uygulama gibi" kurulsun)
+1. Çevrimdışı çalışma (service worker) — simgeler hazır (2026-11-27), telefona kurulunca logolu görünür
 2. Ayarlar ekranı (isim, sabit süreler)
 3. Hedefin gerisinde kalınca hatırlatma bildirimi (uyku saatine kalan süre < kalan hedefin 2 katı)
 
@@ -64,3 +65,4 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
   Buluta gerçekten yazıldığını sayfadan Supabase REST'e sorarak kontrol et. "Başka cihaz"ı taklit etmek için
   paneldeki localStorage'ı o cihazın durumuna getirip sayfayı yenile.
 - Bilgisayarda `gh` (GitHub CLI) yok; `git` ve `python` var.
+- Derlenmiş siteyi denemek için `.claude/launch.json` içinde `preview` (vite preview, port 4173) var.
