@@ -49,13 +49,17 @@ import {
   type AuthUser,
 } from "./supabase";
 import type { Session } from "./types";
+import { escapeHtml, formatMinutes, projectColor } from "./util";
+import { blocksOn, renameBlocksSubject } from "./timetable";
+import { nowBlockHtml, renderTimetable, weekPlanCardHtml, type TimetableCtx } from "./timetableView";
+import { fetchExternal, gcalSync, onGcalChange } from "./gcal";
 
 type Phase = "idle" | "work" | "break" | "askNext";
 
 const app = document.querySelector<HTMLElement>("#app")!;
 const settings = loadSettings();
 let phase: Phase = "idle";
-let view: "timer" | "stats" | "goals" | "subjects" | "account" | "friends" = "timer";
+let view: "timer" | "stats" | "goals" | "subjects" | "account" | "friends" | "timetable" = "timer";
 let goalsEdit: string | undefined; // hedefler sayfasında düzenlenen: "daily", "weekly" ya da "p:<proje>"
 // Arkadaşlar
 let myProfile: Profile | null | undefined; // undefined = henüz yüklenmedi, null = kullanıcı adı yok
@@ -106,14 +110,6 @@ function formatTime(ms: number): string {
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
 function saveCurrent(kind: Session["kind"], durationMs: number): void {
@@ -282,6 +278,7 @@ const ICONS = {
   target: svgIcon('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>'),
   stats: svgIcon('<path d="M4 4v16h16"/><path d="M8 15v-3M12.5 15V8M17 15v-5"/>'),
   users: svgIcon('<circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 19.5c.6-3.2 3.2-5 6.5-5s5.9 1.8 6.5 5"/><path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M18 14.8c1.9.7 3.1 2.3 3.5 4.7"/>'),
+  calendar: svgIcon('<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M7.5 14h3M13.5 14h3M7.5 17.5h3"/>'),
   user: svgIcon('<circle cx="12" cy="8.5" r="4"/><path d="M4.5 20c.8-3.6 3.8-5.8 7.5-5.8s6.7 2.2 7.5 5.8"/>'),
   collapse: svgIcon('<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15M15.5 10l-2 2 2 2"/>'),
   expand: svgIcon('<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15M13.5 10l2 2-2 2"/>'),
@@ -437,6 +434,8 @@ function render(): void {
     renderAccount();
   } else if (view === "friends") {
     renderFriends();
+  } else if (view === "timetable") {
+    renderTimetable(timetableCtx);
   } else if (running) {
     const subtitle =
       phase === "work" ? escapeHtml(currentSubject ?? "Genel çalışma") : "Ara";
@@ -498,6 +497,7 @@ function render(): void {
           )}
           <p class="hype">${escapeHtml(hypeMessage)}</p>
           <p id="together" class="together"></p>
+          ${nowBlockHtml(focusSubject, authUser?.id)}
           <section class="card form setup">
             ${settings.fixedDurations ? "" : durationHtml()}
             ${focusSubject ? lockedSubjectHtml() : subjectPickerHtml()}
@@ -536,6 +536,17 @@ function render(): void {
       askMinutes("work");
     });
     document.querySelector("#break")?.addEventListener("click", () => askMinutes("break"));
+    // "Programda şimdi" kartı: bloğun projesini seç ve hemen başlat.
+    document.querySelector<HTMLButtonElement>("#start-block")?.addEventListener("click", (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      const subj = btn.dataset.subject || undefined;
+      currentSubject = subj && loadSubjects().includes(subj) ? subj : undefined;
+      if (!focusSubject) {
+        settings.lastSubject = currentSubject;
+        saveSettings(settings);
+      }
+      startPhase("work", Number(btn.dataset.min));
+    });
     bindDuration();
   }
 
@@ -583,14 +594,6 @@ function subjectPickerHtml(): string {
         <button id="new-project" class="chip add" title="Yeni proje ekle">＋ Yeni proje</button>
       </div>
     </div>`;
-}
-
-/** Proje adından sabit bir renk (her proje hep aynı renkte görünsün). */
-function projectColor(name: string): string {
-  const palette = ["#7dd3fc", "#818cf8", "#c084fc", "#f472b6", "#ff9a3c", "#ffd166", "#34d399", "#60a5fa"];
-  let h = 0;
-  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return palette[h % palette.length];
 }
 
 // ---------- Süre seçimi ----------
@@ -778,6 +781,22 @@ document.body.append(menuRoot);
 // C++'taki gibi düşün: bu bir "if (genişlik >= 900)"; pencere boyutu değişince sonuç da değişir.
 const desktopQuery = window.matchMedia("(min-width: 900px)");
 const isDesktop = () => desktopQuery.matches;
+
+// Program sayfasına (timetableView.ts) verdiğimiz ortak şeyler.
+const timetableCtx: TimetableCtx = {
+  app,
+  modalRoot,
+  headerHtml,
+  pageHeadHtml,
+  rerender: () => render(),
+  changed: () => runSync(),
+  isDesktop,
+  userId: () => authUser?.id,
+  fetchWeek: (offset, force) => {
+    if (authUser) fetchExternal(authUser.id, offset, force);
+  },
+  syncGoogle: () => syncGoogle(),
+};
 desktopQuery.addEventListener("change", () => {
   menuOpen = false;
   renderMenu();
@@ -858,6 +877,7 @@ function renderMenu(): void {
       ${running ? `<p class="muted small-note menu-empty">Seans sürerken proje değiştirilemez.</p>` : ""}
       <div class="menu-section"></div>
       ${item({ attrs: 'data-go="subjects"', active: view === "subjects", icon: ICONS.folder, label: "Projeleri yönet", disabled: running })}
+      ${item({ attrs: 'data-go="timetable"', active: view === "timetable", icon: ICONS.calendar, label: "Program" })}
       ${item({ attrs: 'data-go="goals"', active: view === "goals", icon: ICONS.target, label: "Hedefler" })}
       ${item({ attrs: 'data-go="stats"', active: view === "stats", icon: ICONS.stats, label: "İstatistikler" })}
       ${item({
@@ -909,6 +929,8 @@ function renderMenu(): void {
         view = "subjects";
       } else if (go === "stats") {
         view = "stats";
+      } else if (go === "timetable") {
+        view = "timetable";
       } else if (go === "goals") {
         view = "goals";
         goalsEdit = undefined;
@@ -967,6 +989,7 @@ async function runSync(showResult = false): Promise<void> {
   if (view === "account") render();
 
   const result = await sync(authUser.id);
+  syncGoogle(); // arka planda; programı Google Calendar ile de eşitle
   syncState = result.ok ? "idle" : "error";
   syncError = result.error;
   if (result.ok) lastSyncAt = Date.now();
@@ -983,6 +1006,34 @@ async function runSync(showResult = false): Promise<void> {
     updateDurationUi();
   }
 }
+
+/**
+ * Programı Google Calendar ile eşitler (bağlıysa) ve bu haftanın + gelecek haftanın Google etkinliklerini indirir.
+ * Google'dan gelen değişiklikler programı değiştirdiyse Supabase'e de yüklenir.
+ */
+async function syncGoogle(): Promise<void> {
+  if (!authUser) return;
+  const userId = authUser.id;
+  const changed = await gcalSync(userId);
+  if (changed && authUser?.id === userId) await sync(userId); // Google'dan gelen blok değişikliklerini buluta da yükle
+  await Promise.all([fetchExternal(userId, 0), fetchExternal(userId, 1)]);
+}
+
+/** Ekranı yeniden çizer ama zamanlayıcıda yazılmış süreyi korur. Seans sürerken dokunmaz. */
+function softRender(): void {
+  if (phase === "work" || phase === "break") return;
+  const minutes = document.querySelector<HTMLInputElement>("#minutes")?.value;
+  render();
+  const input = document.querySelector<HTMLInputElement>("#minutes");
+  if (input && minutes) input.value = minutes;
+  updateDurationUi();
+}
+
+// Google'dan yeni bilgi gelince: program sayfasında her şey, zamanlayıcıda "Programda şimdi" kartı,
+// istatistikte "Plan ve gerçek" değişebilir. Sadece durum yazısı değiştiyse yalnız program sayfası.
+onGcalChange((change) => {
+  if (view === "timetable" || (change === "data" && (view === "timer" || view === "stats"))) softRender();
+});
 
 // Uygulamaya geri dönünce (telefonda sekme değiştirince) ve internet geri gelince eşitle.
 document.addEventListener("visibilitychange", () => {
@@ -1464,6 +1515,7 @@ function renderSubjects(): void {
         toast(`"${newName}" zaten listede.`);
         return;
       }
+      renameBlocksSubject(oldName, newName); // programdaki blokları da yeni ada taşı
       runSync();
       if (currentSubject === oldName) currentSubject = newName;
       if (focusSubject === oldName) focusSubject = newName;
@@ -1503,14 +1555,6 @@ function renderSubjects(): void {
       render();
     }),
   );
-}
-
-function formatMinutes(min: number): string {
-  const total = Math.round(min);
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  if (h === 0) return `${m} dk`;
-  return m === 0 ? `${h} sa` : `${h} sa ${m} dk`;
 }
 
 /**
@@ -1618,7 +1662,8 @@ function renderStats(): void {
         <span class="muted card-meta">bu hafta</span>
       </div>
       <ul class="prows">${projectRows}</ul>
-    </section>`;
+    </section>
+    ${weekPlanCardHtml(authUser?.id)}`;
 }
 
 // ---------- Hedefler sayfası ----------
@@ -1908,6 +1953,33 @@ function bindGoalEditing(): void {
 if ("Notification" in window && Notification.permission === "default") {
   Notification.requestPermission();
 }
+
+// ---------- Program: çalışma bloğu başlayınca haber ver ----------
+// Her 20 saniyede bir bakıyoruz. Arka plandaki sekmede tarayıcı bunu dakikada bire indirebilir,
+// o yüzden "tam başladığı dakika" değil, "son 2 dakika içinde başladı mı" diye soruyoruz.
+const announcedBlocks = new Set<string>(); // "blokId:gün" — aynı blok için bir kez haber ver
+
+function checkBlockStart(): void {
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  for (const b of blocksOn(now)) {
+    if (b.kind !== "study" || nowMin < b.start || nowMin >= b.start + 2) continue;
+    const key = `${b.id}:${now.toDateString()}`;
+    if (announcedBlocks.has(key)) continue;
+    announcedBlocks.add(key);
+    if (phase === "work" || phase === "break") continue; // zaten çalışıyor, bölme
+    notify(`${b.subject ?? "Çalışma"} bloğun başladı. Gazzla!`);
+    if (view === "timer") {
+      // Ekrana "Programda şimdi" kartı gelsin; yazılmış süre kaybolmasın.
+      const minutes = document.querySelector<HTMLInputElement>("#minutes")?.value;
+      render();
+      const input = document.querySelector<HTMLInputElement>("#minutes");
+      if (input && minutes) input.value = minutes;
+      updateDurationUi();
+    }
+  }
+}
+window.setInterval(checkBlockStart, 20_000);
 
 render();
 initLanding();

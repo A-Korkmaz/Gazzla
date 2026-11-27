@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gazzla – Gizlilik</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; min-height: 100vh;
+      background: radial-gradient(60% 50% at 15% 0%, rgba(110, 90, 255, .22), transparent 70%),
+                  radial-gradient(50% 40% at 100% 30%, rgba(60, 140, 255, .16), transparent 70%) #0b0d1a;
+      background-attachment: fixed;
+      color: #e6e8f2;
+      font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 720px; margin: 0 auto; padding: 40px 16px 64px; }
+    .card {
+      background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 18px; padding: 24px 22px; margin-top: 20px;
+    }
+    h1 { font-size: 1.8rem; margin: 0 0 4px; }
+    h2 { font-size: 1.15rem; margin: 0 0 8px; color: #b9b2ff; }
+    p, li { color: #c9cce0; }
+    ul { padding-left: 20px; }
+    a { color: #8fb4ff; }
+    .muted { color: #8a8fa8; font-size: .9rem; }
+    header { display: flex; align-items: center; gap: 12px; }
+    header img { width: 40px; height: 40px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/logo.svg" alt="" />
+    <div>
+      <h1>Gizlilik</h1>
+      <div class="muted">Son güncelleme: 27 Kasım 2026</div>
+    </div>
+  </header>
+
+  <div class="card">
+    <p>Gazzla, bir öğrencinin kendisi ve birkaç arkadaşı için yaptığı bir çalışma zamanlayıcısıdır.
+      Ticari değildir, reklam göstermez, verileri satmaz ve kimseyle paylaşmaz.</p>
+  </div>
+
+  <div class="card">
+    <h2>Cihazında tutulanlar</h2>
+    <p>Çalışma seansların, projelerin, hedeflerin ve programın önce kendi cihazında (tarayıcının
+      depolama alanında) tutulur. Giriş yapmadan da uygulama tamamen çalışır.</p>
+  </div>
+
+  <div class="card">
+    <h2>Giriş yaparsan</h2>
+    <p>Hesap açarsan e-posta adresin, kullanıcı adın, seansların, projelerin ve programın başka
+      cihazlarınla eşitlenmek için <strong>Supabase</strong>'te (sunucular İsviçre, Zürih) saklanır.
+      Her kullanıcı yalnız kendi kayıtlarını görebilir.</p>
+    <p>Arkadaş eklediğin kişiler yalnızca <strong>toplam çalışma sürelerini</strong> ve şu an
+      çalışıp çalışmadığını görür. Proje adlarını, seans ayrıntılarını ve programını göremezler.</p>
+  </div>
+
+  <div class="card">
+    <h2>Google Takvim (isteğe bağlı)</h2>
+    <p>Google Takvim'i bağlarsan Gazzla şu izinleri ister ve yalnızca şunları yapar:</p>
+    <ul>
+      <li><strong>Kendi "Gazzla" takvimini oluşturup yönetmek</strong>
+        (<code>calendar.app.created</code>): program bloklarını bu ayrı takvime yazar ve
+        orada yaptığın değişiklikleri programa geri alır. Başka takvimlerine hiçbir şey yazmaz.</li>
+      <li><strong>Takvim listeni ve etkinliklerini okumak</strong>
+        (<code>calendar.calendarlist.readonly</code>, <code>calendar.events.readonly</code>):
+        öbür takvimlerindeki etkinlikleri programında göstermek için. Bu etkinlikler (başlık, saat,
+        takvim adı ve rengi) yalnızca cihazında önbelleğe alınır; sunucuya yüklenmez ve
+        değiştirilmez.</li>
+    </ul>
+    <p>Bağlantıyı sürdürmek için Google'ın verdiği yenileme anahtarı, yalnız sunucu tarafındaki bir
+      fonksiyonun erişebildiği bir tabloda saklanır; tarayıcıya ya da başka kullanıcılara verilmez.
+      Uygulamadaki <strong>"Bağlantıyı kes"</strong> düğmesi bu anahtarı Google'da iptal eder ve
+      siler. Erişimi istediğin an
+      <a href="https://myaccount.google.com/permissions" rel="noopener">Google hesap izinlerinden</a>
+      de kaldırabilirsin.</p>
+    <p>Gazzla'nın Google API'lerinden aldığı bilgileri kullanması
+      <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API Services User Data Policy</a>'ye,
+      Limited Use (sınırlı kullanım) şartları dahil, uyar. Bu veriler reklam için kullanılmaz,
+      satılmaz ve yapay zekâ modeli eğitmek için kullanılmaz.</p>
+  </div>
+
+  <div class="card">
+    <h2>Silme ve iletişim</h2>
+    <p>Hesabının ve tüm kayıtlarının silinmesini istersen ya da bir sorun olursa, Google izin
+      ekranında görünen destek e-posta adresine yaz. Cihazındaki kayıtları tarayıcının site
+      verilerini temizleyerek kendin silebilirsin.</p>
+  </div>
+
+  <div class="card">
+    <h2>In English</h2>
+    <p>Gazzla is a small, non-commercial study timer used by its developer and a few friends.
+      Data stays on your device; if you sign in it is synced to Supabase (Zurich) and visible only to you
+      (friends see only total study time and live status). If you connect Google Calendar, Gazzla
+      writes only to its own "Gazzla" calendar and reads your other calendars solely to display them
+      in your schedule, caching them on your device only. The refresh token is stored server-side
+      and revoked and deleted when you disconnect. Gazzla's use of information received from Google
+      APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements.
+      No data is sold, shared, used for ads, or used to train AI models.</p>
+  </div>
+
+  <p class="muted" style="margin-top:24px"><a href="/">← Gazzla'ya dön</a></p>
+</main>
+</body>
+</html>

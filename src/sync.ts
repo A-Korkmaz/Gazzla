@@ -28,6 +28,16 @@ import {
   saveSyncOwner,
 } from "./storage";
 import type { Session } from "./types";
+import {
+  clearPendingBlocks,
+  loadAllBlocks,
+  loadPendingBlocks,
+  loadTimetableOwner,
+  markPendingBlocks,
+  saveAllBlocks,
+  saveTimetableOwner,
+  type Block,
+} from "./timetable";
 
 /** Veritabanındaki bir satırın şekli (sütun adları SQL'deki gibi). */
 interface SessionRow {
@@ -83,6 +93,7 @@ const snapshot = () =>
     [...loadSessions()].sort((a, b) => a.startedAt - b.startedAt),
     loadSubjects(),
     loadSubjectGoals(),
+    [...loadAllBlocks()].sort((a, b) => a.id.localeCompare(b.id)),
   ]);
 
 async function doSync(userId: string): Promise<SyncResult> {
@@ -96,7 +107,7 @@ async function doSync(userId: string): Promise<SyncResult> {
     saveSyncOwner(userId);
   } else if (owner !== userId) {
     // Bu cihazda daha önce BAŞKA bir hesapla giriş yapılmış.
-    if (loadPending().length > 0 || loadPendingProjects().length > 0) {
+    if (loadPending().length > 0 || loadPendingProjects().length > 0 || loadPendingBlocks().length > 0) {
       // Önceki hesabın yüklenmemiş kayıtları var: onları silmeyelim, yeni hesaba da karıştırmayalım.
       return {
         ok: false,
@@ -107,8 +118,10 @@ async function doSync(userId: string): Promise<SyncResult> {
     // Önceki hesabın her şeyi zaten bulutta; bu cihazı yeni hesap için boşalt.
     saveSessions([]);
     replaceProjects([], {});
+    saveAllBlocks([]);
     saveSyncOwner(userId);
     saveProjectsOwner(userId);
+    saveTimetableOwner(userId);
   }
 
   // Projeler bu hesapla hiç eşitlenmediyse (ilk giriş ya da bu özellikten önce giriş yapılmış cihaz):
@@ -116,6 +129,11 @@ async function doSync(userId: string): Promise<SyncResult> {
   if (loadProjectsOwner() !== userId) {
     markPendingProjects(loadSubjects());
     saveProjectsOwner(userId);
+  }
+  // Program için de aynısı (program bu hesapla hiç eşitlenmediyse tüm bloklar yüklensin).
+  if (loadTimetableOwner() !== userId) {
+    markPendingBlocks(loadAllBlocks().map((b) => b.id));
+    saveTimetableOwner(userId);
   }
 
   // --- 1) Yükle ---
@@ -163,6 +181,10 @@ async function doSync(userId: string): Promise<SyncResult> {
   // --- 3) Projeler ---
   const projectError = await syncProjects(userId);
   if (projectError) return { ok: false, changed: before !== snapshot(), error: projectError };
+
+  // --- 4) Program ---
+  const timetableError = await syncTimetable(userId);
+  if (timetableError) return { ok: false, changed: before !== snapshot(), error: timetableError };
 
   return { ok: true, changed: before !== snapshot() };
 }
@@ -237,6 +259,95 @@ async function syncProjects(userId: string): Promise<string | undefined> {
   });
 
   replaceProjects(list, goals);
+  return undefined;
+}
+
+// ---------- Program (ders programı) ----------
+// Seanslarla aynı: bekleyen blokları yükle, sonra hepsini indirip birleştir.
+// Silinen blok deleted = true olarak kalır (öbür cihaz da silindiğini öğrensin).
+
+interface BlockRow {
+  id: string;
+  user_id: string;
+  kind: "study" | "fixed";
+  subject: string | null;
+  title: string | null;
+  weekday: number | null;
+  date: string | null; // "2026-12-03"
+  start_min: number;
+  end_min: number;
+  deleted: boolean;
+  updated_at?: string;
+}
+
+function blockToRow(b: Block, userId: string): BlockRow {
+  return {
+    id: b.id,
+    user_id: userId,
+    kind: b.kind,
+    subject: b.subject ?? null,
+    title: b.title ?? null,
+    weekday: b.weekday ?? null,
+    date: b.date ?? null,
+    start_min: b.start,
+    end_min: b.end,
+    deleted: b.deleted ?? false,
+  };
+}
+
+function blockFromRow(r: BlockRow): Block {
+  return {
+    id: r.id,
+    kind: r.kind,
+    subject: r.subject ?? undefined,
+    title: r.title ?? undefined,
+    weekday: r.weekday ?? undefined,
+    date: r.date ?? undefined,
+    start: r.start_min,
+    end: r.end_min,
+    updatedAt: r.updated_at ? Date.parse(r.updated_at) : 0,
+    deleted: r.deleted || undefined,
+  };
+}
+
+async function syncTimetable(userId: string): Promise<string | undefined> {
+  // --- Yükle ---
+  const pending = loadPendingBlocks();
+  if (pending.length > 0) {
+    const pendingSet = new Set(pending);
+    const rows = loadAllBlocks()
+      .filter((b) => pendingSet.has(b.id))
+      .map((b) => blockToRow(b, userId));
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await supabase.from("timetable_blocks").upsert(rows.slice(i, i + 500));
+      if (error) return explain(error, "timetable_blocks");
+    }
+    clearPendingBlocks(pending);
+  }
+
+  // --- İndir ---
+  const remote: Block[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("timetable_blocks")
+      .select("id, user_id, kind, subject, title, weekday, date, start_min, end_min, deleted, updated_at")
+      .eq("user_id", userId)
+      .order("id")
+      .range(from, from + 999);
+    if (error) return explain(error, "timetable_blocks");
+    const rows = (data ?? []) as BlockRow[];
+    remote.push(...rows.map(blockFromRow));
+    if (rows.length < 1000) break;
+  }
+
+  // --- Birleştir --- (buluttaki esas; bu sırada değişmiş, hâlâ bekleyen bloklarda bu cihazdaki hal)
+  const stillPending = new Set(loadPendingBlocks());
+  const merged = new Map<string, Block>();
+  for (const b of remote) merged.set(b.id, b);
+  for (const b of loadAllBlocks()) {
+    if (stillPending.has(b.id) || !merged.has(b.id)) merged.set(b.id, b);
+  }
+  saveAllBlocks([...merged.values()]);
   return undefined;
 }
 

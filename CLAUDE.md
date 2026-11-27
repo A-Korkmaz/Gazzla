@@ -23,7 +23,13 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 | `src/friends.ts` | Kullanıcı adı, arkadaşlık istekleri, arkadaş süreleri, "şu an çalışıyor" (presence) |
 | `src/landing.ts`, `src/landing.css` | Giriş (tanıtım) sayfası: uygulamanın üstünde tam ekran katman. İlk ziyarette açılır, "Uygulamayı aç" deyince `gazzla.seenLanding` kaydedilir; kurulu PWA'da açılmaz; üst çubuktaki logo ya da `?tanitim` ile yeniden açılır |
 | `src/hype.ts`, `src/effects.ts` | Gaz mesajları; konfeti, toast, ses |
-| `supabase/01_sessions.sql`, `02_friends.sql`, `03_projects.sql` | Supabase tabloları ve RLS kuralları. **Üçü de SQL Editor'de çalıştırıldı**; tekrar çalıştırma (`create policy` hata verir). Yeni tablo → `04_...sql` |
+| `src/util.ts` | Ortak küçük yardımcılar: `escapeHtml`, `formatMinutes`, `projectColor`, `clockText` |
+| `src/timetable.ts` | Program (timetable) verisi: `Block` tipi, localStorage (`gazzla.timetable`, bekleyenler `gazzla.pendingTimetable`), hafta/gün hesapları, çakışan blokların şeritlere dizilmesi |
+| `src/gcal.ts` | Google Calendar: bağlanma (Google Identity Services, kod akışı), "Gazzla" takvimiyle iki yönlü eşitleme, öbür takvimleri okuma (önbellek `gazzla.gcalExternal`, durum `gazzla.gcal`). `GOOGLE_CLIENT_ID` boşsa Google bölümü gizli |
+| `supabase/functions/gcal-auth/index.ts` | Supabase Edge Function: Google yenileme anahtarını `google_tokens` tablosunda saklar, tarayıcıya 1 saatlik erişim anahtarı verir (exchange / token / disconnect). Gizliler: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
+| `src/timetableView.ts` | Program sayfası (haftalık tablo, blok penceresi, "Plan ve gerçek" kartı) + zamanlayıcıdaki "Programda şimdi" kartı. main.ts'ten `TimetableCtx` ile çağrılır |
+| `supabase/01_sessions.sql`, `02_friends.sql`, `03_projects.sql`, `04_timetable.sql`, `05_google.sql` | Supabase tabloları ve RLS kuralları. **01–05 SQL Editor'de çalıştırıldı**; tekrar çalıştırma (`create policy` hata verir). `google_tokens`'ta bilerek hiç kural yok (yalnız sunucu fonksiyonu erişir). Yeni tablo → `06_...sql` |
+| `public/gizlilik.html` | Gizlilik sayfası (düz HTML, Türkçe + kısa İngilizce). Google izin ekranındaki privacy policy bağlantısı buraya gider; veri kullanımı değişirse güncelle |
 | `public/manifest.webmanifest` | PWA bilgisi (ad, renkler, simgeler). Service worker **yok** |
 | `public/logo.svg`, `public/icons/` | Logo (favicon + üst çubuk/menü) ve PNG simgeler: 192, 512, maskable-512 (logo küçültülmüş), apple-touch-icon 180 (köşesiz). PNG'ler logo.svg'den Edge headless ile üretildi; logo değişirse yeniden üret |
 
@@ -53,6 +59,21 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
   `gazzla.pendingProjects`'te. İki cihaz internetsizken aynı projeyi değiştirirse son yükleyen kazanır.
 - Supabase: bölge Zürih. Proje adresi `oeloqmdhffbehavolwik.supabase.co`.
 - Netlify ayarları (derleme komutu, `dist`) Netlify panelinde; projede `netlify.toml` yok.
+- **Program (timetable)**, `view = "timetable"`, menüde "Program". Bloklar: `study` (projeye bağlı çalışma) ya da
+  `fixed` (ders/etkinlik, süreye sayılmaz); ya her hafta (`weekday`, 0 = pazartesi) ya tek tarih (`date`). Saatler
+  gece yarısından beri dakika. Bulutta `timetable_blocks` (anahtar `id`), silinen blok `deleted = true`.
+  Çalışma bloğu başlayınca bildirim (`checkBlockStart`, 20 sn'de bir); zamanlayıcıda "Programda şimdi" kartı
+  bloğun projesiyle `min(kalan, 90)` dk başlatır. İstatistikte ve program sayfasında "Plan ve gerçek" kartı.
+- **Google Calendar** (iki yönlü, bir kez izin): Gazzla blokları Google'da ayrı **"Gazzla"** takvimine yazılır
+  (haftalık blok = `RRULE:FREQ=WEEKLY`, etkinlikte `extendedProperties.private.gazzlaId`). O takvimde Google'da
+  yapılan değişiklik/silme/yeni etkinlik programa döner. Öbür takvimler **sadece okunur** ve programda olduğu gibi
+  gösterilir (kesikli kutu, tüm gün olanlar gün başlığında şerit).
+  **Ahmet'in kuralı: tanımlanmamış bir etkinlik asla projeye çevrilmez**; Gazzla o durumda plan görme uygulaması gibi
+  davranır. Sadece adı mevcut bir projeyle aynıysa (büyük/küçük harf fark etmez) o projenin planı sayılır.
+  Google izinleri en dar olanlar: `calendar.app.created`, `calendar.events.readonly`, `calendar.calendarlist.readonly`.
+  Uzun ömürlü anahtar sunucuda (gcal-auth), bu yüzden Google için Gazzla girişi şart; aynı hesapla başka cihaz
+  kendiliğinden bağlı sayılır (günde bir yoklama). Şimdilik tekrarlayan etkinliğin tek bir gününü Google'da
+  değiştirmek yok sayılıyor. Google Cloud uygulaması "Testing" modunda kalırsa anahtarlar 7 günde ölür → "In production".
 
 ## Durum (son güncelleme 2026-11-27)
 - Bitti: seans eşitlemesi, arkadaşlar, proje listesi + hedeflerin eşitlenmesi (canlı sitede iki cihazla test edildi),
@@ -63,6 +84,21 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 - Bulutta `__test__` ve `__test2__` adlı iki `deleted = true` test satırı var; zararsız.
 
 ## Sırada
+0. **Devam eden (dal `timetable`, commitlenmedi):** program + Supabase eşitlemesi bitti ve gerçek hesapla test edildi.
+   Google Calendar kodu yazıldı, Google olmadan test edildi. **Google Cloud kurulumu bitti (2026-11-27)**: proje
+   `gazzla`, Calendar API açık, 3 izin, Web istemcisi "Gazzla web" (JS kaynakları netlify, localhost:5173, :4173;
+   popup akışı, redirect URI yok), ana sayfa + gizlilik bağlantısı (`public/gizlilik.html`) girildi, durum
+   **In production** (doğrulanmamış; kullanıcılar "unverified app" uyarısını Advanced ile geçer, en fazla 100 kişi).
+   `GOOGLE_CLIENT_ID` `src/gcal.ts`'e yazıldı. Client secret Ahmet'te (JSON indirdi), koda/sohbete yazılmaz.
+   **Supabase de bitti (2026-11-27)**: `05_google.sql` çalıştırıldı, `gcal-auth` panelin editöründen yayınlandı
+   (CLI yok), gizliler `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` kayıtlı. Fonksiyonda "Verify JWT with legacy
+   secret" açık bırakıldı; giriş yapılmış isteklerde sorun çıkarmadı (test edildi).
+   **Uçtan uca test geçti (2026-11-27, localhost:4173, Ahmet'in hesabı)**: bağlanma, 7 bloğun "Gazzla" takvimine
+   yazılması (haftalık = RRULE), Google'da eklenen etkinliğin programa dönmesi (proje adıyla aynıysa çalışma,
+   değilse sabit), Google'da silmenin programa ve buluta (`deleted = true`) dönmesi. Kalan: commit + main.
+   Not: Claude'un tarayıcı paneli Google açılır penceresini Claude'un tıklamasıyla açmaz; "bağla"ya Ahmet basar.
+   Gizlilik sayfası canlıya bu dalla birlikte çıkar.
+   Ahmet "tamam" demeden commit/push yok. Ahmet'in hesabında test projeleri/blokları duruyor (önemsiz dedi).
 1. Çevrimdışı çalışma (service worker) — simgeler hazır (2026-11-27), telefona kurulunca logolu görünür
 2. Ayarlar ekranı (isim, sabit süreler)
 3. Hedefin gerisinde kalınca hatırlatma bildirimi (uyku saatine kalan süre < kalan hedefin 2 katı)
