@@ -37,6 +37,9 @@ export interface AssistantCtx {
   rerender: () => void; // main.ts'teki render() (üst çubuğun düğmelerini de bağlar)
   changed: () => void; // program değişti: buluta ve Google'a eşitle
   openTimetable: () => void; // Program sayfasına geç
+  openTimer: () => void; // Zamanlayıcıya geç
+  /** Zamanlayıcıyı ayarlar (start = true ise başlatır). Seans sürüyorsa ok = false. */
+  setupSession: (minutes: number, project: string | undefined, start: boolean) => { ok: boolean; text: string };
   /** Kullanıcının o anki verileri (süreler, hedefler, projeler, bugünkü program) düz metin olarak. */
   contextText: () => string;
 }
@@ -47,11 +50,20 @@ interface Proposal {
   status: "pending" | "added" | "cancelled";
 }
 
+interface SessionCard {
+  minutes: number;
+  project?: string;
+  ok: boolean;
+  started: boolean;
+  text: string;
+}
+
 type Msg = {
   role: "user" | "assistant";
   content: string;
   error?: boolean;
-  proposal?: Proposal; // koç: programa ekleme önerisi
+  proposal?: Proposal; // programa ekleme önerisi
+  session?: SessionCard; // zamanlayıcı ayarlandı/başlatıldı
   image?: string; // ders asistanı: kullanıcının eklediği fotoğraf (data URL)
   note?: string; // cevap gelene kadar gösterilen küçük not ("materyaller okunuyor...")
 };
@@ -102,15 +114,12 @@ function upcomingDays(): string {
   return out.join(", ");
 }
 
-function systemPrompt(ctx: AssistantCtx): string {
+/**
+ * Araç kuralları: iki modda da aynı (Koç ve Ders asistanı sitede aynı işleri yapabilsin).
+ * Program önerme + zamanlayıcıyı ayarlama/başlatma.
+ */
+function toolRules(): string {
   return [
-    "Sen Gazzla AI'sın: Gazzla adlı çalışma zamanlayıcısının yapay zeka asistanı.",
-    "Kullanıcıya Türkçe, samimi, kısa ve gaz veren bir dille çalışma koçluğu yap: plan, motivasyon, odak, çalışma teknikleri.",
-    "Cevapların kısa olsun (genelde birkaç cümle ya da kısa bir liste). Tablo kullanma. Emoji az kullan.",
-    "Hangi şirketin ya da hangi dil modelinin olduğunu asla söyleme, tahmin de ettirme. Sorulursa sadece",
-    "\"Ben Gazzla AI'yım, Gazzla'nın yapay zeka asistanıyım\" de.",
-    "Marka adı her zaman \"Gazzla\" (iki z). Uygulamada \"ders\" yerine \"proje\" deniyor.",
-    "",
     "PROGRAM: Kullanıcı ders, sunum, sınav, etkinlik ya da çalışma saati anlatıp programına eklemek isterse",
     "(ya da senden çalışma planı isteyip kabul ederse) program_oner aracını çağır. Kurallar:",
     "- Sunum, sınav, ders, toplantı gibi şeyler kind=\"fixed\", title ile (ör. \"Analysis sunumu\").",
@@ -127,7 +136,28 @@ function systemPrompt(ctx: AssistantCtx): string {
     "- Saatler 24 saatlik HH:MM. Bitiş saati söylenmediyse makul bir süre seç (ders/sunum 1 saat gibi) ve bunu söyle.",
     "- Gün ya da saat belirsizse aracı çağırmadan önce kısaca sor.",
     "- Aracı çağırdıktan sonra tek kısa cümle yaz; kullanıcı ekranda çıkan karttan onaylayacak. Blokları metinde tekrar sayma.",
+    "",
+    "SEANS: Kullanıcı çalışma seansı/zamanlayıcı ayarlamanı ya da başlatmanı isterse (ör. \"50 dk Analysis çalışacağım\",",
+    "\"25 dakikalık seans başlat\") seans_ayarla aracını çağır. minutes = dakika; saat söylenirse dakikaya çevir.",
+    "  project: listedeki proje adı (aynen); listede yoksa ya da belirtilmediyse boş bırak (genel çalışma).",
+    "  start=true SADECE kullanıcı şimdi başlatmak istiyorsa (\"başlat\", \"hadi başlayalım\"); yoksa false (sadece hazırla).",
+    "  Süre söylenmediyse ve kullanıcı bir öneri istiyorsa makul bir süre seç (ör. 50 dk).",
+    "  Aracı çağırdıktan sonra tek kısa, gaz veren cümle yaz.",
+    `Projeler: ${loadSubjects().join(", ") || "(henüz yok)"}.`,
     `Tarihler: ${upcomingDays()}.`,
+  ].join("\n");
+}
+
+function systemPrompt(ctx: AssistantCtx): string {
+  return [
+    "Sen Gazzla AI'sın: Gazzla adlı çalışma zamanlayıcısının yapay zeka asistanı.",
+    "Kullanıcıya Türkçe, samimi, kısa ve gaz veren bir dille çalışma koçluğu yap: plan, motivasyon, odak, çalışma teknikleri.",
+    "Cevapların kısa olsun (genelde birkaç cümle ya da kısa bir liste). Tablo kullanma. Emoji az kullan.",
+    "Hangi şirketin ya da hangi dil modelinin olduğunu asla söyleme, tahmin de ettirme. Sorulursa sadece",
+    "\"Ben Gazzla AI'yım, Gazzla'nın yapay zeka asistanıyım\" de.",
+    "Marka adı her zaman \"Gazzla\" (iki z). Uygulamada \"ders\" yerine \"proje\" deniyor.",
+    "",
+    toolRules(),
     "",
     "Kullanıcının uygulamadaki güncel verileri aşağıda. Gerektiğinde kullan, veri uydurma.",
     ctx.contextText(),
@@ -164,6 +194,23 @@ const TOOLS = [
           },
         },
         required: ["blocks"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "seans_ayarla",
+      description:
+        "Zamanlayıcıda çalışma seansını ayarlar: süreyi ve projeyi seçer; start=true ise hemen başlatır.",
+      parameters: {
+        type: "object",
+        properties: {
+          minutes: { type: "integer", minimum: 1, maximum: 600, description: "Seansın süresi, dakika" },
+          project: { type: "string", description: "Proje adı, listeden aynen; yoksa boş (genel çalışma)" },
+          start: { type: "boolean", description: "Kullanıcı şimdi başlatmak istiyorsa true, sadece hazırlamak için false" },
+        },
+        required: ["minutes", "start"],
       },
     },
   },
@@ -264,6 +311,45 @@ function blockName(b: Block): string {
 }
 
 /** Öneriyi geçmişte modele hatırlatmak için kısa metin. */
+/** Mesaj metni + (varsa) araç sonuçlarının kısa notu; modele geçmişi hatırlatmak için. */
+function withToolNotes(m: Msg): string {
+  const notes = [m.proposal ? proposalSummary(m.proposal) : "", m.session ? `[Zamanlayıcı: ${m.session.text}]` : ""];
+  return [m.content, ...notes].filter(Boolean).join("\n").trim();
+}
+
+/** seans_ayarla çağrısını çalıştırır (main.ts'teki setupSession). */
+function runSession(ctx: AssistantCtx, argsJson: string, userText: string): SessionCard {
+  let a: { minutes?: unknown; project?: unknown; start?: unknown } = {};
+  try {
+    a = JSON.parse(argsJson || "{}");
+  } catch {
+    /* bozuksa varsayılanlar */
+  }
+  const minutes = Math.min(600, Math.max(1, Math.round(Number(a.minutes) || 50)));
+  const project = typeof a.project === "string" && a.project.trim() ? a.project.trim() : undefined;
+  // Model bazen "hazırla" deyince de başlatıyor. Güvenlik kemeri: kullanıcının mesajında açık bir başlatma
+  // isteği yoksa sadece hazırla (kartta "Başlat" düğmesi çıkar). "başlayacağım" gibi gelecek zaman sayılmaz.
+  const asked = /başlat|başlayalım|başlıyorum|başla(?=[\s!.,]|$)|hemen|şimdi|hadi|\bstart\b|\bgo\b/i.test(userText);
+  const start = a.start === true && asked;
+  const r = ctx.setupSession(minutes, project, start);
+  return { minutes, project, ok: r.ok, started: r.ok && start, text: r.text };
+}
+
+function sessionHtml(sc: SessionCard, i: number): string {
+  const actions = !sc.ok
+    ? ""
+    : sc.started
+      ? `<button class="small ghost" data-open-timer>Zamanlayıcıya git →</button>`
+      : `<button class="small primary" data-sess-start="${i}">Başlat</button>
+         <button class="small ghost" data-open-timer>Zamanlayıcıya git →</button>`;
+  return `
+    <div class="ai-plan ${sc.ok ? "" : "cancelled"}">
+      <div class="ai-plan-title">Zamanlayıcı</div>
+      <p class="ai-session-line">${escapeHtml(sc.text)}</p>
+      ${actions ? `<div class="ai-plan-actions">${actions}</div>` : ""}
+    </div>`;
+}
+
 function proposalSummary(p: Proposal): string {
   const list = p.blocks.map((b) => `${whenText(b)} ${clockText(b.start)}–${clockText(b.end)} ${blockName(b)}`).join("; ");
   const state = p.status === "added" ? "kullanıcı programa ekledi" : p.status === "cancelled" ? "kullanıcı vazgeçti" : "kullanıcı henüz onaylamadı";
@@ -320,10 +406,10 @@ function proposalHtml(p: Proposal, i: number): string {
 function bubbleHtml(m: Msg, i: number): string {
   const text = m.content ? formatText(m.content) : "";
   const typing = `<span class="ai-typing"><i></i><i></i><i></i></span>${m.note ? ` <span class="muted small-note">${escapeHtml(m.note)}</span>` : ""}`;
-  const body = text || m.proposal ? text : typing;
+  const body = text || m.proposal || m.session ? text : typing;
   const img = m.image ? `<img class="ai-msg-img" src="${m.image}" alt="Eklenen görsel" />` : "";
-  return `<div class="ai-msg ${m.role} ${m.error ? "error" : ""} ${m.proposal ? "has-plan" : ""}" data-i="${i}">
-      ${img}${body}${m.proposal ? proposalHtml(m.proposal, i) : ""}
+  return `<div class="ai-msg ${m.role} ${m.error ? "error" : ""} ${m.proposal || m.session ? "has-plan" : ""}" data-i="${i}">
+      ${img}${body}${m.proposal ? proposalHtml(m.proposal, i) : ""}${m.session ? sessionHtml(m.session, i) : ""}
     </div>`;
 }
 
@@ -599,6 +685,17 @@ export function renderAssistant(ctx: AssistantCtx): void {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button");
     if (!btn) return;
     if (btn.dataset.openTt !== undefined) return ctx.openTimetable();
+    if (btn.dataset.openTimer !== undefined) return ctx.openTimer();
+    if (btn.dataset.sessStart !== undefined) {
+      const sc = hist()[Number(btn.dataset.sessStart)]?.session;
+      if (!sc || sc.started) return;
+      const r = ctx.setupSession(sc.minutes, sc.project, true);
+      sc.ok = r.ok;
+      sc.started = r.ok;
+      sc.text = r.text;
+      if (!r.ok) ctx.rerender(); // başarılıysa zaten zamanlayıcıya geçti
+      return;
+    }
     const idx = Number(btn.dataset.add ?? btn.dataset.cancel);
     const p = hist()[idx]?.proposal;
     if (!p || p.status !== "pending") return;
@@ -654,7 +751,7 @@ function coachRequest(ctx: AssistantCtx, h: Msg[], answer: Msg): Promise<Respons
       .slice(-20)
       .map((m) => ({
         role: m.role,
-        content: m.proposal ? `${m.content}\n${proposalSummary(m.proposal)}`.trim() : m.content,
+        content: withToolNotes(m),
       })),
   ];
   return fetch("/api/ai", {
@@ -664,7 +761,7 @@ function coachRequest(ctx: AssistantCtx, h: Msg[], answer: Msg): Promise<Respons
   });
 }
 
-function studySystemPrompt(ctx: AssistantCtx, names: string[]): string {
+function studySystemPrompt(names: string[]): string {
   return [
     "Sen Gazzla Ders Asistanısın: Gazzla adlı çalışma uygulamasının ders çalışma asistanı. Kullanıcı üniversite öğrencisi (ETH Zürih).",
     "Görevin: anlamadığı yeri açık ve sade anlatmak, sınav ve alıştırma sorularını adım adım çözmek, özet çıkarmak,",
@@ -679,8 +776,12 @@ function studySystemPrompt(ctx: AssistantCtx, names: string[]): string {
     "Hangi şirketin ya da hangi dil modelinin olduğunu asla söyleme; sorulursa \"Ben Gazzla Ders Asistanıyım\" de.",
     "Marka adı her zaman \"Gazzla\" (iki z).",
     "",
-    "Kullanıcının çalışma verileri (gerekirse kullan):",
-    ctx.contextText(),
+    "Sitede işlem de yapabilirsin (araçlarla):",
+    toolRules(),
+    "",
+    // Çalışma verisi ve program bilerek GÖNDERİLMİYOR: program Google Takvim'den gelen etkinlikleri içerebilir ve
+    // bu servisin ücretsiz katmanı içerikleri ürün geliştirmede kullanabiliyor (gizlilik sayfasındaki söz).
+    `Bugün: ${new Date().toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.`,
   ].join("\n");
 }
 
@@ -700,7 +801,7 @@ async function studyRequest(ctx: AssistantCtx, h: Msg[], answer: Msg): Promise<R
       const last = i === past.length - 1;
       return {
         role: m.role,
-        text: m.image && !last ? `${m.content}\n[Burada bir görsel vardı]` : m.content,
+        text: m.image && !last ? `${withToolNotes(m)}\n[Burada bir görsel vardı]` : withToolNotes(m),
         image: last ? m.image : undefined, // eski görselleri tekrar göndermiyoruz (istek hafif kalsın)
         files: last ? files : undefined,
       };
@@ -708,7 +809,7 @@ async function studyRequest(ctx: AssistantCtx, h: Msg[], answer: Msg): Promise<R
     return fetch("/api/study", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ system: studySystemPrompt(ctx, mats.map((m) => m.name)), messages }),
+      body: JSON.stringify({ system: studySystemPrompt(mats.map((m) => m.name)), messages, tools: TOOLS }),
     });
   };
   let res = await post(false);
@@ -740,12 +841,14 @@ async function send(ctx: AssistantCtx, text: string): Promise<void> {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let sessionArgs: string | undefined; // seans_ayarla akış bitince çalıştırılır (ekran değişebilir)
     const handle = (line: string) => {
       if (!line.trim()) return;
       try {
         const msg = JSON.parse(line) as { text?: string; tool?: string; args?: string };
         if (msg.text) answer.content += msg.text;
         if (msg.tool === "program_oner") answer.proposal = toProposal(msg.args ?? "");
+        if (msg.tool === "seans_ayarla") sessionArgs = msg.args ?? "{}";
       } catch {
         /* bozuk satırı atla */
       }
@@ -760,9 +863,13 @@ async function send(ctx: AssistantCtx, text: string): Promise<void> {
       updateLast(h);
     }
     handle(buffer);
+    if (sessionArgs !== undefined) {
+      answer.session = runSession(ctx, sessionArgs, content);
+      if (!answer.content.trim()) answer.content = answer.session.ok ? "Tamam, ayarladım. Gazzla!" : "";
+    }
     if (answer.proposal && !answer.content.trim())
       answer.content = answer.proposal.blocks.length ? "Şunları programına ekleyeyim mi?" : "";
-    if (!answer.content && !answer.proposal) throw new Error("Boş cevap geldi. Tekrar dener misin?");
+    if (!answer.content && !answer.proposal && !answer.session) throw new Error("Boş cevap geldi. Tekrar dener misin?");
     ok = true;
   } catch (err) {
     answer.error = true;

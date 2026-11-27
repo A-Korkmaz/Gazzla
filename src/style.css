@@ -2837,3 +2837,9 @@ a.btn-link:hover { background: rgba(255, 255, 255, 0.1); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.ai-session-line {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}

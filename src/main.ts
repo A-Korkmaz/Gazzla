@@ -85,6 +85,7 @@ let editingGoal: GoalKind | undefined; // hangi hedef düzenleniyor (yoksa hiçb
 // Ders modu: sol menüden bir derse girildiyse o dersin adı. Bu modda zamanlayıcı o derse kilitlenir
 // ve ekranda o dersin hedefi ve istatistikleri görünür. undefined = ana ekran.
 let focusSubject: string | undefined;
+let presetMin: number | undefined; // Gazzla AI'nin ayarladığı süre; zamanlayıcının süre kutusu bununla açılır
 let menuOpen = false;
 // Bilgisayarda sol menü daraltılmış mı (yalnız ikonlar)? Seçim bu cihazda hatırlanır.
 const MENU_COLLAPSED_KEY = "gazzla.menuCollapsed";
@@ -138,6 +139,7 @@ function notify(message: string): void {
 // ---------- Akış ----------
 
 function startPhase(kind: "work" | "break", minutes: number): void {
+  presetMin = undefined; // asistanın ayarladığı süre bir kez kullanılır
   phase = kind;
   phaseTotalMs = minutes * 60_000;
   hypeMessage = kind === "work" ? hype.start(settings.userName) : "Mola zamanı. Kalk, su iç, gözlerini dinlendir.";
@@ -625,7 +627,7 @@ function durationHtml(): string {
         <button type="button" class="step" data-step="-5" aria-label="5 dakika azalt">−</button>
         <label class="stepper-value">
           <input id="minutes" type="number" min="1" max="600" inputmode="numeric"
-                 value="${settings.defaultWorkMin}" aria-label="Süre (dakika)" />
+                 value="${presetMin ?? settings.defaultWorkMin}" aria-label="Süre (dakika)" />
           <span>dakika</span>
         </label>
         <button type="button" class="step" data-step="5" aria-label="5 dakika artır">+</button>
@@ -801,6 +803,30 @@ const timetableCtx: TimetableCtx = {
   },
   syncGoogle: () => syncGoogle(),
 };
+/**
+ * Gazzla AI'nin "seans_ayarla" aracı: zamanlayıcının süresini ve projesini ayarlar, istenirse hemen başlatır.
+ * Proje adı listede yoksa genel çalışma olur (yeni proje açmaz).
+ */
+function aiSetupSession(minutes: number, project: string | undefined, start: boolean): { ok: boolean; text: string } {
+  if (phase === "work" || phase === "break") return { ok: false, text: "Şu an bir seans sürüyor; bitince ayarlayabilirim." };
+  const min = Math.min(600, Math.max(1, Math.round(minutes)));
+  const wanted = project?.trim().toLocaleLowerCase("tr");
+  const subj = wanted ? loadSubjects().find((p) => p.toLocaleLowerCase("tr") === wanted) : undefined;
+  focusSubject = undefined;
+  currentSubject = subj;
+  settings.lastSubject = subj;
+  saveSettings(settings);
+  const label = `${min} dk · ${subj ?? "Genel çalışma"}`;
+  const note = wanted && !subj ? ` ("${project}" adında proje yok, genel çalışma olarak ayarladım.)` : "";
+  if (start) {
+    view = "timer";
+    startPhase("work", min);
+    return { ok: true, text: `Seans başladı: ${label}.${note}` };
+  }
+  presetMin = min;
+  return { ok: true, text: `Zamanlayıcı hazır: ${label}.${note}` };
+}
+
 // Gazzla AI sayfasına (assistant.ts) verdiğimiz ortak şeyler.
 const assistantCtx: AssistantCtx = {
   app,
@@ -812,6 +838,12 @@ const assistantCtx: AssistantCtx = {
     view = "timetable";
     render();
   },
+  openTimer: () => {
+    focusSubject = undefined;
+    view = "timer";
+    render();
+  },
+  setupSession: aiSetupSession,
   contextText: assistantContext,
 };
 

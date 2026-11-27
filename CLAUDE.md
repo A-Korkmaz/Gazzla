@@ -31,7 +31,7 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 | `supabase/01_sessions.sql`, `02_friends.sql`, `03_projects.sql`, `04_timetable.sql`, `05_google.sql` | Supabase tabloları ve RLS kuralları. **01–05 SQL Editor'de çalıştırıldı**; tekrar çalıştırma (`create policy` hata verir). `google_tokens`'ta bilerek hiç kural yok (yalnız sunucu fonksiyonu erişir). Yeni tablo → `06_...sql` |
 | `src/assistant.ts` | "Gazzla AI" sohbet sayfası (`view = "assistant"`, menüde yalnız `npm run dev`'de). Kullanıcı verisini `assistantContext()` (main.ts) düz metin yapar, system prompt'la `/api/ai`'ye yollar, cevabı parça parça yazar. Sohbet kaydedilmez. `program_oner` aracı → önizleme kartı → "Programa ekle" (`putBlock` + `changed`). Mikrofon (sessizlikte kendiliğinden durur) + "Sesli sohbet" (cevabı tarayıcının Türkçe sesiyle okur, sonra yine dinler; seçim `gazzla.aiVoice`) |
 | `src/study.ts` | Ders asistanı materyalleri: IndexedDB (`gazzla-study`, Blob'larla; buluta gitmez), `/api/study/upload` ile servise yükleme (~48 saat kalır, süresi dolunca kendiliğinden yeniden), fotoğraf küçültme |
-| `server/gemini.ts` | Ders asistanı aracısı (dev sunucusunda, `vite.config.ts` bağlar): `/api/study/upload` (Files API, dosya adı gönderilmez) ve `/api/study` (sohbet akışı → NDJSON `{text}`). `GEMINI_API_KEY`; model `GEMINI_MODEL` ya da listeden en yeni sade `gemini-*-flash` |
+| `server/gemini.ts` | Ders asistanı aracısı (dev sunucusunda, `vite.config.ts` bağlar): `/api/study/upload` (Files API, dosya adı gönderilmez) ve `/api/study` (sohbet akışı → NDJSON `{text}`). `GEMINI_API_KEY`. Modeller sırayla denenir: `GEMINI_MODEL` → `gemini-flash-latest` → en yeni 3 sade `gemini-*-flash` → `gemini-flash-lite-latest` (503/429/yanıtsız 25 sn → sıradaki; akış 45 sn durursa "yarıda kesildi" notu). Araçlar OpenAI biçiminden `functionDeclarations`'a çevrilir (`toSchema`) |
 | `vite.config.ts` | Yalnız dev sunucusunda `/api/ai` aracısı: `.env.local`'deki `GROQ_API_KEY`'i ekleyip Groq'a (`openai/gpt-oss-120b`, düşünme "low") iletir; tarayıcıya NDJSON (`{text}` / `{tool,args}`) döner, servis/model adı tarayıcıya gitmez. `/api/transcribe`: ses kaydı → `whisper-large-v3-turbo` → yazı |
 | `public/gizlilik.html` | Gizlilik sayfası (düz HTML, Türkçe + kısa İngilizce). Google izin ekranındaki privacy policy bağlantısı buraya gider; veri kullanımı değişirse güncelle |
 | `public/manifest.webmanifest` | PWA bilgisi (ad, renkler, simgeler). Service worker **yok** |
@@ -58,6 +58,12 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
   **Ders asistanı** = Gemini (materyal: PDF/resim/metin, sınav çözme, soru fotoğrafı ataşla ya da Ctrl+V). Her modun ayrı
   sohbeti var. Gemini seçildi çünkü PDF'i (taranmış dahil) kendisi okuyor; Groq ücretsizde dakikada 8.000 token ile sınırlı.
   Ders asistanı "Ben Gazzla Ders Asistanıyım" der; formüller Unicode (KaTeX yok).
+  **İki mod da aynı araçları kullanır** (`TOOLS`, kurallar `toolRules()`): `program_oner` (kartla onay) ve
+  `seans_ayarla` (zamanlayıcıyı ayarlar; `main.ts` → `aiSetupSession`, `presetMin`). Seans yalnızca kullanıcının
+  mesajında açık başlatma isteği varsa ("başlat", "hadi", "şimdi"...) hemen başlar; yoksa kartta "Başlat" düğmesi.
+  **Gizlilik sözü:** ders asistanına (Gemini ücretsiz katmanı, içerik ürün geliştirmede kullanılabilir) çalışma
+  verisi ve program **gönderilmez** (program Google Takvim verisi içerebilir); sadece proje adları + tarihler.
+  `public/gizlilik.html`'de "Gazzla AI" bölümü: tüm gizlilik ödünleri uygulamayı ücretsiz tutmak için.
 - **Gazzla AI** (2026-11-27): Groq üstünde ama arayüzde, ağ isteklerinde ve cevaplarda Groq/model adı geçmez;
   system prompt "Ben Gazzla AI'yım" dedirtir. **Şimdilik yalnız localhost**: menü satırı ve sayfa `import.meta.env.DEV`
   ile korunuyor, derlenmiş sitede kodu bile yok. Anahtar `.env.local`'de (gitignore'da), Ahmet kendisi yazar.
@@ -115,7 +121,8 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
    Not: Claude'un tarayıcı paneli Google açılır penceresini Claude'un tıklamasıyla açmaz; "bağla"ya Ahmet basar.
    Gizlilik sayfası canlıya bu dalla birlikte çıkar.
    Ahmet "tamam" demeden commit/push yok. Ahmet'in hesabında test projeleri/blokları duruyor (önemsiz dedi).
-1. Gazzla AI devamı: (a) **Ders asistanını gerçek Gemini anahtarıyla test et** (kod hazır, anahtar bekleniyor);
+1. Gazzla AI devamı: (a) Ders asistanı gerçek anahtarla test edildi (2026-11-27; materyalden soru çözme, programa
+   ekleme). Google o gün çok yoğundu (503), cevaplar ~40 sn sürdü;
    (b) Google Drive bağlantısı: Google Picker + `drive.file` izni (yalnız seçilen dosyalar; geniş `drive.readonly` "restricted"
    olduğu için Google doğrulaması ister), seçilen dosyalar materyal olur; (c) istenirse formüller için KaTeX.
    Gazzla AI'yı canlıya almak (isteğe bağlı): anahtar Supabase Edge Function'a (`gcal-auth` gibi), giriş şartı,

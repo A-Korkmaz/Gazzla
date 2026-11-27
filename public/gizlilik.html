@@ -36,7 +36,7 @@
     <img src="/logo.svg" alt="" />
     <div>
       <h1>Gizlilik</h1>
-      <div class="muted">Son güncelleme: 27 Kasım 2026</div>
+      <div class="muted">Son güncelleme: 27 Kasım 2026 (Gazzla AI bölümü eklendi)</div>
     </div>
   </header>
 
@@ -86,6 +86,33 @@
   </div>
 
   <div class="card">
+    <h2>Gazzla AI (yapay zekâ asistanı, deneme aşamasında)</h2>
+    <p><strong>Önce açık bir not:</strong> Gazzla tamamen ücretsizdir ve öyle kalsın istiyoruz. Bu yüzden
+      yapay zekâ için servislerin <strong>ücretsiz sürümlerini</strong> kullanıyoruz. Aşağıda gizlilikten
+      verdiğimiz bütün ödünler bu yüzdendir: ücretli sürümler daha iyi gizlilik koşulları sunuyor ama
+      para gerektiriyor. Gazzla bunlardan para kazanmaz, verilerini satmaz.</p>
+    <p>Asistanın iki modu var. İkisini de yalnızca <strong>sen bir şey sorduğunda</strong> kullanırsın;
+      sen sormadıkça hiçbir şey gönderilmez.</p>
+    <ul>
+      <li><strong>Koç</strong> (Groq): yazdığın mesajlar ve cevap verebilmesi için çalışma verinin kısa bir
+        özeti (bugünkü ve haftalık süren, hedeflerin, proje adların ve bugünkü programın) Groq'a gönderilir.
+        Programın, Google Takvim'deki "Gazzla" takviminden gelen bloklar içerebilir. Sesli konuşursan ses
+        kaydın yazıya çevrilmek için yine Groq'a gider.</li>
+      <li><strong>Ders asistanı</strong> (Google Gemini API): yazdığın mesajlar, eklediğin fotoğraflar, proje
+        adların ve işaretlediğin materyaller (PDF, not, fotoğraf) Google'a gönderilir. Materyaller Google'ın
+        sunucularında en fazla yaklaşık 48 saat kalır, sonra Google tarafından silinir; asıl kopyası yalnızca
+        senin cihazında durur. <strong>Ücretsiz sürümün bedeli:</strong> Google'ın şartlarına göre ücretsiz
+        sürüme gönderilen içerik Google'ın ürünlerini geliştirmek için kullanılabilir ve insanlar tarafından
+        incelenebilir. Bu yüzden ders asistanına kişisel ya da hassas bilgi içeren belge yükleme.</li>
+    </ul>
+    <p>Google Takvim'den alınan veriler (etkinliklerin, takvimlerin) <strong>hiçbir zaman</strong> ders
+      asistanına, yani Google'ın ücretsiz yapay zekâ servisine gönderilmez ve hiçbir yapay zekâ modelini
+      eğitmek için kullanılmaz. Koç'a giden program özeti yalnızca senin sorunu cevaplamak için kullanılır.</p>
+    <p>Sohbetler kaydedilmez; sayfayı kapatınca silinir. Asistan programına bir şey eklemeden önce her zaman
+      onayını ister.</p>
+  </div>
+
+  <div class="card">
     <h2>Silme ve iletişim</h2>
     <p>Hesabının ve tüm kayıtlarının silinmesini istersen ya da bir sorun olursa, Google izin
       ekranında görünen destek e-posta adresine yaz. Cihazındaki kayıtları tarayıcının site
@@ -101,7 +128,16 @@
       in your schedule, caching them on your device only. The refresh token is stored server-side
       and revoked and deleted when you disconnect. Gazzla's use of information received from Google
       APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements.
-      No data is sold, shared, used for ads, or used to train AI models.</p>
+      Data received from Google APIs is never sold, shared, used for ads, sent to the AI study assistant,
+      or used to train AI models.</p>
+    <p><strong>Gazzla AI (beta):</strong> Gazzla is free and we want to keep it that way, so the AI assistant
+      uses the <strong>free tiers</strong> of AI services; every privacy trade-off below exists only to keep
+      Gazzla free. Nothing is sent unless you ask something. The "Coach" mode sends your messages, a short
+      summary of your study data (times, goals, project names, today's schedule) and, if you speak, your voice
+      recording to Groq. The "Study assistant" mode sends your messages, photos, project names and the
+      materials you select to the Google Gemini API, where files are kept for about 48 hours. Under Google's
+      free-tier terms, content may be used to improve Google's products and may be reviewed by humans, so do
+      not upload personal or sensitive documents. Chats are not stored.</p>
   </div>
 
   <p class="muted" style="margin-top:24px"><a href="/">← Gazzla'ya dön</a></p>

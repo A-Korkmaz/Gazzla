@@ -12,6 +12,24 @@ const API = "https://generativelanguage.googleapis.com";
 type Part = { text?: string; fileData?: { mimeType: string; fileUri: string }; inlineData?: { mimeType: string; data: string } };
 type Content = { role: "user" | "model"; parts: Part[] };
 
+/**
+ * JSON Schema'yı bu servisin şema biçimine çevirir: "type" değerleri büyük harf (OBJECT, STRING...),
+ * desteklemediği alanlar atılır. Özyinelemeli (recursive): iç içe nesneler ve diziler için kendini çağırır.
+ */
+function toSchema(s: unknown): unknown {
+  if (!s || typeof s !== "object") return s;
+  const src = s as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(src)) {
+    if (k === "type" && typeof v === "string") out.type = v.toUpperCase();
+    else if (k === "properties" && v && typeof v === "object")
+      out.properties = Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([pk, pv]) => [pk, toSchema(pv)]));
+    else if (k === "items") out.items = toSchema(v);
+    else if (["description", "enum", "required", "minimum", "maximum", "nullable", "format"].includes(k)) out[k] = v;
+  }
+  return out;
+}
+
 function fail(res: ServerResponse, status: number, error: string): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
@@ -30,12 +48,12 @@ async function readBody(req: IncomingMessage, limit: number): Promise<Buffer | u
 }
 
 /**
- * Kullanılacak model. .env.local'de GEMINI_MODEL varsa o; yoksa servisin listesinden en yeni kararlı "flash"
- * modeli (hızlı ve ücretsiz katmanda en cömert olanı). Bir kez bulunup saklanır.
+ * Kullanılacak modeller, sırayla. .env.local'de GEMINI_MODEL varsa önce o; sonra servisin listesinden en yeni
+ * sade "flash" modelleri (hızlı, ücretsiz katmanda en cömert olanlar). En yenisi yoğunsa (503) sıradakine geçilir.
+ * Liste bir kez bulunup saklanır.
  */
-let modelPromise: Promise<string> | undefined;
-function pickModel(key: string, wanted: string | undefined): Promise<string> {
-  if (wanted) return Promise.resolve(wanted.replace(/^models\//, ""));
+let modelPromise: Promise<string[]> | undefined;
+function pickModels(key: string, wanted: string | undefined): Promise<string[]> {
   modelPromise ??= (async () => {
     const res = await fetch(`${API}/v1beta/models?pageSize=200`, { headers: { "x-goog-api-key": key } });
     if (!res.ok) throw new Error(`models ${res.status}`);
@@ -49,9 +67,15 @@ function pickModel(key: string, wanted: string | undefined): Promise<string> {
           /^gemini-[\d.]+-flash$/.test(m.id), // "-lite", "-preview", "-image", "-tts" vb. olmayan sade flash
       )
       .sort((a, b) => version(b.id) - version(a.id));
-    const chosen = candidates[0]?.id ?? "gemini-flash-latest";
-    console.log("[gazzla-study] model:", chosen);
-    return chosen;
+    // "gemini-flash-latest" Google'ın "güncel kararlı flash" takma adı: genelde en az yoğun olanı, o yüzden başta.
+    const list = [
+      ...(wanted ? [wanted.replace(/^models\//, "")] : []),
+      "gemini-flash-latest",
+      ...candidates.slice(0, 3).map((m) => m.id),
+      "gemini-flash-lite-latest", // son çare: daha hafif, genelde daha az yoğun
+    ].filter((id, i, all) => all.indexOf(id) === i);
+    console.log("[gazzla-study] modeller:", list.join(", "));
+    return list;
   })().catch((err) => {
     modelPromise = undefined; // bir dahakine yeniden dene
     throw err;
@@ -120,12 +144,20 @@ export function studyRoutes(middlewares: Connect.Server, key: string | undefined
 
     let system = "";
     let contents: Content[];
+    let functionDeclarations: unknown[] = [];
     try {
       const body = JSON.parse(raw.toString("utf8")) as {
         system?: string;
         messages: { role: "user" | "assistant"; text: string; files?: { uri: string; mimeType: string }[]; image?: string }[];
+        tools?: { function?: { name: string; description?: string; parameters?: unknown } }[];
       };
       system = String(body.system ?? "");
+      // Araçlar (program_oner, seans_ayarla) Koç'takiyle aynı tanımla geliyor (OpenAI biçimi);
+      // bu servisin biçimine çeviriyoruz: { name, description, parameters } + tür adları BÜYÜK harf.
+      functionDeclarations = (body.tools ?? [])
+        .slice(0, 5)
+        .filter((t) => t.function?.name)
+        .map((t) => ({ name: t.function!.name, description: t.function!.description ?? "", parameters: toSchema(t.function!.parameters) }));
       contents = body.messages.slice(-16).map((m) => {
         const parts: Part[] = [];
         for (const f of m.files ?? []) parts.push({ fileData: { mimeType: f.mimeType, fileUri: f.uri } });
@@ -138,27 +170,48 @@ export function studyRoutes(middlewares: Connect.Server, key: string | undefined
       return fail(res, 400, "bad-json");
     }
 
-    let model: string;
+    let models: string[];
     try {
-      model = await pickModel(key, wantedModel);
+      models = await pickModels(key, wantedModel);
     } catch (err) {
       console.warn("[gazzla-study]", err);
       return fail(res, 502, "upstream");
     }
 
-    const upstream = await fetch(`${API}/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
-      method: "POST",
-      headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: system ? { parts: [{ text: system }] } : undefined,
-        contents,
-        generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
-      }),
-    }).catch(() => undefined);
+    const body = JSON.stringify({
+      systemInstruction: system ? { parts: [{ text: system }] } : undefined,
+      contents,
+      generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
+      ...(functionDeclarations.length ? { tools: [{ functionDeclarations }] } : {}),
+    });
+    // Sırayla dene: model yoğunsa (503/500) ya da o modelin sınırı dolduysa (429) bir sonrakine geç.
+    // C++ benzetmesi: for döngüsünde "başarılı olana kadar dene, olunca break".
+    let upstream: Response | undefined;
+    let text = "";
+    for (const model of models) {
+      // Yoğunlukta bazı modeller hiç cevap vermeden bekletiyor: 25 sn'de başlamazsa vazgeç, sıradakine geç.
+      const abort = new AbortController();
+      const timer = setTimeout(() => abort.abort(), 25_000);
+      upstream = await fetch(`${API}/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
+        method: "POST",
+        headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+        body,
+        signal: abort.signal,
+      }).catch(() => undefined);
+      clearTimeout(timer);
+      if (!upstream) {
+        console.warn("[gazzla-study]", model, "zaman aşımı");
+        continue;
+      }
+      if (upstream?.ok && upstream.body) break;
+      text = (await upstream?.text().catch(() => "")) ?? "";
+      console.warn("[gazzla-study]", model, upstream?.status, text.slice(0, 300));
+      // Yoğunluk, sınır ya da model yok → sıradaki model. Başka hata (ör. dosyanın süresi dolmuş) → değiştirmek fayda etmez.
+      const busyModel = upstream && ([429, 500, 503].includes(upstream.status) || (upstream.status === 404 && !/file/i.test(text)));
+      if (upstream && !busyModel) break;
+    }
     if (!upstream) return fail(res, 502, "network");
     if (!upstream.ok || !upstream.body) {
-      const text = await upstream.text().catch(() => "");
-      console.warn("[gazzla-study]", upstream.status, text.slice(0, 500));
       if (upstream.status === 429) return fail(res, 429, "rate-limit");
       // Yüklenen dosyanın süresi dolmuşsa tarayıcı yeniden yükleyip tekrar dener.
       if (/file|uri/i.test(text) && (upstream.status === 400 || upstream.status === 403 || upstream.status === 404))
@@ -178,18 +231,34 @@ export function studyRoutes(middlewares: Connect.Server, key: string | undefined
       if (!data.startsWith("data:")) return;
       try {
         const json = JSON.parse(data.slice(5).trim()) as {
-          candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[];
+          candidates?: {
+            content?: { parts?: { text?: string; thought?: boolean; functionCall?: { name: string; args?: unknown } }[] };
+          }[];
         };
         for (const p of json.candidates?.[0]?.content?.parts ?? [])
-          if (p.text && !p.thought) res.write(JSON.stringify({ text: p.text }) + "\n");
+          if (p.functionCall?.name)
+            // Koç'taki gibi: {"tool": ad, "args": "<JSON metni>"}
+            res.write(JSON.stringify({ tool: p.functionCall.name, args: JSON.stringify(p.functionCall.args ?? {}) }) + "\n");
+          else if (p.text && !p.thought) res.write(JSON.stringify({ text: p.text }) + "\n");
       } catch {
         /* bozuk satırı atla */
       }
     };
+    // Akış 45 sn hiç parça göndermezse (yoğunlukta oluyor) bekleme; cevabı notla kapat.
+    const STALL_MS = 45_000;
     for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      let stallTimer: ReturnType<typeof setTimeout> | undefined;
+      const stalled = new Promise<"stalled">((r) => (stallTimer = setTimeout(() => r("stalled"), STALL_MS)));
+      const next = await Promise.race([reader.read(), stalled]);
+      clearTimeout(stallTimer);
+      if (next === "stalled") {
+        reader.cancel().catch(() => {});
+        console.warn("[gazzla-study] akış takıldı");
+        res.write(JSON.stringify({ text: "\n\n(Cevap yarıda kesildi; servis şu an çok yoğun. Biraz sonra tekrar sor.)" }) + "\n");
+        break;
+      }
+      if (next.done) break;
+      buffer += decoder.decode(next.value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
       lines.forEach(handle);
