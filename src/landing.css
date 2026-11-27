@@ -1,0 +1,765 @@
+/* ---------- Giriş (tanıtım) sayfası ---------- */
+
+body.lp-open {
+  overflow: hidden;
+}
+
+.lp {
+  --lp-bg: #05070d;
+  --lp-text: #f1f5f9;
+  --lp-muted: #94a0b8;
+  --lp-line: rgba(255, 255, 255, 0.08);
+  --lp-glass: rgba(255, 255, 255, 0.04);
+  --lp-grad: linear-gradient(100deg, #7dd3fc 0%, #818cf8 35%, #c084fc 55%, #ff9a3c 80%, #ffd166 100%);
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--lp-bg);
+  color: var(--lp-text);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  scroll-behavior: smooth;
+  animation: lp-in 0.5s ease both;
+}
+
+.lp.closing {
+  animation: lp-out 0.45s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes lp-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes lp-out {
+  to { opacity: 0; transform: scale(1.03); filter: blur(6px); }
+}
+
+.lp a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.lp-grad {
+  background: var(--lp-grad);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: lp-shine 8s linear infinite;
+}
+
+@keyframes lp-shine {
+  to { background-position: 200% center; }
+}
+
+/* Arka plan: yavaş süzülen renk lekeleri + ince ızgara */
+.lp-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.lp-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.55;
+}
+
+.lp-blob.b1 {
+  width: 520px; height: 520px; left: -140px; top: -160px;
+  background: #3b5bff;
+  animation: lp-drift 22s ease-in-out infinite alternate;
+}
+
+.lp-blob.b2 {
+  width: 460px; height: 460px; right: -120px; top: 120px;
+  background: #9333ea;
+  opacity: 0.4;
+  animation: lp-drift 26s ease-in-out infinite alternate-reverse;
+}
+
+.lp-blob.b3 {
+  width: 420px; height: 420px; left: 30%; top: 520px;
+  background: #ff7a18;
+  opacity: 0.25;
+  animation: lp-drift 30s ease-in-out infinite alternate;
+}
+
+@keyframes lp-drift {
+  to { transform: translate(80px, 60px) scale(1.15); }
+}
+
+.lp-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--lp-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lp-line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse at 50% 20%, #000 10%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 20%, #000 10%, transparent 70%);
+  opacity: 0.6;
+}
+
+/* Üst çubuk */
+.lp-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px max(16px, calc((100% - 1160px) / 2));
+  transition: background 0.3s, border-color 0.3s, backdrop-filter 0.3s;
+  border-bottom: 1px solid transparent;
+}
+
+.lp-nav.scrolled {
+  background: rgba(5, 7, 13, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom-color: var(--lp-line);
+}
+
+.lp-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.4px;
+}
+
+.lp-brand img {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.lp-nav-links {
+  display: flex;
+  gap: 28px;
+  font-size: 15px;
+  color: var(--lp-muted);
+}
+
+.lp-nav-links a:hover {
+  color: var(--lp-text);
+}
+
+/* Düğmeler */
+.lp-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 26px;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  color: #05070d;
+  background: linear-gradient(100deg, #ffd166, #ff7a18);
+  box-shadow: 0 10px 40px -10px rgba(255, 122, 24, 0.7);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.lp-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 50px -10px rgba(255, 122, 24, 0.85);
+}
+
+.lp-btn .arrow {
+  transition: transform 0.2s;
+}
+
+.lp-btn:hover .arrow {
+  transform: translateX(4px);
+}
+
+.lp-btn.ghost {
+  color: var(--lp-text);
+  background: var(--lp-glass);
+  border: 1px solid var(--lp-line);
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+}
+
+.lp-btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.lp-btn.small {
+  padding: 10px 18px;
+  font-size: 14px;
+}
+
+/* Hero */
+.lp-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  align-items: center;
+  gap: 40px;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 72px 16px 96px;
+  min-height: calc(100vh - 70px);
+}
+
+.lp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(129, 140, 248, 0.3);
+  animation: lp-up 0.8s 0.1s ease both;
+}
+
+.lp-pill .dot,
+.lp-float .live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+  animation: lp-pulse 1.8s infinite;
+  display: inline-block;
+}
+
+@keyframes lp-pulse {
+  70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.lp-hero h1 {
+  margin: 22px 0 0;
+  font-size: clamp(48px, 7.4vw, 96px);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  font-weight: 800;
+  animation: lp-up 0.9s 0.2s ease both;
+}
+
+.lp-lead {
+  max-width: 520px;
+  margin: 26px 0 0;
+  font-size: clamp(16px, 1.6vw, 19px);
+  line-height: 1.6;
+  color: var(--lp-muted);
+  animation: lp-up 0.9s 0.35s ease both;
+}
+
+.lp-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 34px;
+  animation: lp-up 0.9s 0.5s ease both;
+}
+
+.lp-note {
+  margin: 18px 0 0;
+  font-size: 13px;
+  color: #6b7690;
+  animation: lp-up 0.9s 0.6s ease both;
+}
+
+@keyframes lp-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Sağdaki görsel: halka + yüzen kartlar */
+.lp-hero-visual {
+  position: relative;
+  aspect-ratio: 1;
+  max-width: 500px;
+  width: 100%;
+  justify-self: center;
+  animation: lp-up 1s 0.3s ease both;
+}
+
+.lp-orbit {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  animation: lp-spin 60s linear infinite;
+}
+
+.lp-orbit::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #7dd3fc;
+  box-shadow: 0 0 18px #7dd3fc;
+}
+
+@keyframes lp-spin {
+  to { transform: rotate(360deg); }
+}
+
+.lp-ring {
+  position: absolute;
+  inset: 13%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, rgba(99, 102, 241, 0.25), rgba(5, 7, 13, 0.9) 70%);
+  box-shadow:
+    0 0 120px -20px rgba(99, 102, 241, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.lp-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.lp-ring .track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 6;
+}
+
+.lp-ring .bar {
+  fill: none;
+  stroke: url(#lpRingGrad);
+  stroke-width: 6;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 8px rgba(129, 140, 248, 0.8));
+}
+
+.lp-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.lp-ring-time {
+  font-size: clamp(44px, 6vw, 72px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-ring-label {
+  margin-top: 4px;
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--lp-muted);
+}
+
+.lp-float {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: rgba(20, 26, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.8);
+  font-size: 14px;
+  animation: lp-bob 6s ease-in-out infinite;
+}
+
+.lp-float small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--lp-muted);
+  font-size: 12px;
+}
+
+.lp-float .av {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-weight: 800;
+  background: linear-gradient(135deg, #818cf8, #c084fc);
+}
+
+.lp-float.f1 { left: -4%; top: 14%; }
+.lp-float.f2 {
+  right: -2%; top: 40%;
+  flex-direction: column;
+  gap: 2px;
+  animation-delay: -2s;
+}
+.lp-float.f2 .big { font-size: 22px; font-weight: 800; }
+.lp-float.f3 {
+  left: 6%; bottom: 6%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  animation-delay: -4s;
+}
+.lp-float.f3 b { font-size: 18px; }
+
+.mini-bar {
+  width: 140px;
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.mini-bar span {
+  display: block;
+  width: 72%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffd166, #ff7a18);
+}
+
+@keyframes lp-bob {
+  50% { transform: translateY(-12px); }
+}
+
+/* Kayan yazı şeridi */
+.lp-marquee {
+  position: relative;
+  overflow: hidden;
+  border-block: 1px solid var(--lp-line);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 18px 0;
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+
+.lp-marquee-track {
+  display: flex;
+  gap: 28px;
+  width: max-content;
+  white-space: nowrap;
+  font-size: clamp(18px, 2.4vw, 26px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #cbd5e1;
+  animation: lp-scroll 40s linear infinite;
+}
+
+.lp-marquee-track i {
+  font-style: normal;
+  color: #818cf8;
+}
+
+@keyframes lp-scroll {
+  to { transform: translateX(-50%); }
+}
+
+/* Sayılar */
+.lp-stats {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 72px 16px;
+  gap: 16px;
+}
+
+.lp-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 20px;
+  border-left: 1px solid var(--lp-line);
+}
+
+.lp-stats b {
+  font-size: clamp(40px, 5vw, 60px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  background: linear-gradient(180deg, #fff, #94a0b8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.lp-stats b small {
+  font-size: 0.45em;
+  margin-left: 4px;
+}
+
+.lp-stats span {
+  color: var(--lp-muted);
+  font-size: 14px;
+}
+
+/* Bölümler */
+.lp-section {
+  position: relative;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 80px 16px;
+}
+
+.lp-section-head {
+  max-width: 720px;
+  margin-bottom: 48px;
+}
+
+.lp-kicker {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #818cf8;
+}
+
+.lp h2 {
+  margin: 14px 0 0;
+  font-size: clamp(34px, 4.6vw, 58px);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  font-weight: 800;
+}
+
+.lp-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.lp-card {
+  position: relative;
+  padding: 28px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  border: 1px solid var(--lp-line);
+  overflow: hidden;
+  transition: transform 0.3s, border-color 0.3s;
+}
+
+.lp-card::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: radial-gradient(400px circle at 0% 0%, rgba(129, 140, 248, 0.18), transparent 50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.lp-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(129, 140, 248, 0.35);
+}
+
+.lp-card:hover::after {
+  opacity: 1;
+}
+
+.lp-card-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  font-size: 22px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--lp-line);
+}
+
+.lp-card h3,
+.lp-steps h3 {
+  margin: 20px 0 8px;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+
+.lp-card p,
+.lp-steps p {
+  margin: 0;
+  color: var(--lp-muted);
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+.lp-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  counter-reset: none;
+}
+
+.lp-steps li {
+  padding: 28px 4px 0;
+  border-top: 1px solid var(--lp-line);
+  position: relative;
+}
+
+.lp-steps li::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 60px;
+  height: 2px;
+  background: var(--lp-grad);
+}
+
+.lp-steps .n {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ff9a3c;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Son çağrı */
+.lp-final {
+  position: relative;
+  max-width: 1160px;
+  margin: 40px auto 0;
+  padding: 100px 16px 110px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  overflow: hidden;
+}
+
+.lp-final-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 700px;
+  height: 400px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse, rgba(99, 102, 241, 0.35), transparent 65%);
+  filter: blur(30px);
+  pointer-events: none;
+}
+
+.lp-final > * {
+  position: relative;
+}
+
+.lp-final-logo {
+  width: 84px;
+  height: 84px;
+  border-radius: 22px;
+  box-shadow: 0 0 60px -10px rgba(125, 211, 252, 0.6);
+}
+
+.lp-final h2 {
+  margin: 0;
+}
+
+.lp-footer {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 28px 16px 40px;
+  border-top: 1px solid var(--lp-line);
+  color: #6b7690;
+  font-size: 13px;
+}
+
+.lp-footer a:hover {
+  color: var(--lp-text);
+}
+
+/* Kaydırınca belirme */
+.lp-reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition:
+    opacity 0.8s ease var(--d, 0ms),
+    transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0ms),
+    border-color 0.3s;
+}
+
+.lp-reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
+.lp-card.lp-reveal.in:hover {
+  transform: translateY(-4px);
+}
+
+/* Uygulamadaki logo tıklanabilir (tanıtımı açar) */
+#app header .logo-mark,
+#app header .logo {
+  cursor: pointer;
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+  .lp-hero {
+    grid-template-columns: 1fr;
+    padding-top: 40px;
+    min-height: 0;
+    text-align: center;
+  }
+  .lp-lead { margin-inline: auto; }
+  .lp-ctas { justify-content: center; }
+  .lp-hero-visual { max-width: 420px; }
+  .lp-cards { grid-template-columns: repeat(2, 1fr); }
+  .lp-stats { grid-template-columns: repeat(2, 1fr); row-gap: 36px; }
+}
+
+/* Telefon */
+@media (max-width: 600px) {
+  .lp-nav-links { display: none; }
+  .lp-hero { padding-bottom: 64px; gap: 32px; }
+  .lp-hero-visual { max-width: 340px; }
+  .lp-float { padding: 9px 12px; font-size: 12px; border-radius: 12px; }
+  .lp-float.f1 { left: -2%; top: 4%; }
+  .lp-float.f2 { right: -2%; }
+  .lp-float.f3 { left: 0; bottom: 0; }
+  .mini-bar { width: 100px; }
+  .lp-cards, .lp-steps { grid-template-columns: 1fr; }
+  .lp-section { padding: 56px 16px; }
+  .lp-stats { padding: 48px 16px; }
+  .lp-blob { filter: blur(70px); }
+  .lp-blob.b1 { width: 320px; height: 320px; }
+  .lp-blob.b2 { width: 300px; height: 300px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp *,
+  .lp {
+    animation: none !important;
+    transition: none !important;
+  }
+  .lp-reveal { opacity: 1; transform: none; }
+}

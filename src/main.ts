@@ -2,6 +2,7 @@
 // Akış: süre gir → çalış → bitince ara mı, yeni seans mı?
 
 import "./style.css";
+import { initLanding } from "./landing";
 import { CountdownTimer } from "./timer";
 import {
   addSession,
@@ -1364,6 +1365,7 @@ if ("Notification" in window && Notification.permission === "default") {
 }
 
 render();
+initLanding();
 
 // Açılışta daha önce giriş yapılmış mı bak; sonra giriş/çıkış olunca haberdar ol.
 // Kullanıcı değişmediyse (Supabase arada oturumu sessizce yeniler) ekranı boşuna yeniden çizme.

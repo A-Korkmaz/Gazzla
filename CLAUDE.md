@@ -21,6 +21,7 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 | `src/sync.ts` | Seansları ve proje listesini (hedefleriyle) Supabase ile eşitleme (önce cihaz, sonra bulut; "bekleyenler" listeleri) |
 | `src/supabase.ts` | Supabase bağlantısı + giriş (e-posta/şifre) |
 | `src/friends.ts` | Kullanıcı adı, arkadaşlık istekleri, arkadaş süreleri, "şu an çalışıyor" (presence) |
+| `src/landing.ts`, `src/landing.css` | Giriş (tanıtım) sayfası: uygulamanın üstünde tam ekran katman. İlk ziyarette açılır, "Uygulamayı aç" deyince `gazzla.seenLanding` kaydedilir; kurulu PWA'da açılmaz; üst çubuktaki logo ya da `?tanitim` ile yeniden açılır |
 | `src/hype.ts`, `src/effects.ts` | Gaz mesajları; konfeti, toast, ses |
 | `supabase/01_sessions.sql`, `02_friends.sql`, `03_projects.sql` | Supabase tabloları ve RLS kuralları. **Üçü de SQL Editor'de çalıştırıldı**; tekrar çalıştırma (`create policy` hata verir). Yeni tablo → `04_...sql` |
 | `public/manifest.webmanifest` | PWA bilgisi (ad, renkler, simgeler). Service worker **yok** |
@@ -41,7 +42,7 @@ Canlı site: https://gazzla-08t7.netlify.app/ — Netlify, GitHub `main` dalına
 
 ## Durum (son güncelleme 2026-11-27)
 - Bitti: seans eşitlemesi, arkadaşlar, proje listesi + hedeflerin eşitlenmesi (canlı sitede iki cihazla test edildi),
-  internette yayın (Netlify).
+  internette yayın (Netlify), giriş (tanıtım) sayfası (2026-11-27).
 - Açık küçük kontrol: Supabase → Authentication → URL Configuration → **Site URL** hâlâ `http://localhost:5173`
   olabilir; `https://gazzla-08t7.netlify.app` olmalı (yoksa arkadaşların kayıt onay e-postası localhost'a gider).
 - Bulutta `__test__` ve `__test2__` adlı iki `deleted = true` test satırı var; zararsız.
