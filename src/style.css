@@ -1822,3 +1822,21 @@ button.icon.round:hover:not(:disabled) {
     max-width: 680px;
   }
 }
+
+/* Yazının yanındaki küçük çizgi ikonlar (emoji yerine) */
+.ico {
+  display: inline-flex;
+  vertical-align: -0.15em;
+}
+.ico svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+button.primary .ico svg {
+  fill: currentColor;
+  stroke-width: 1.5;
+}
+.duration-hint .ico {
+  color: var(--accent);
+  margin-right: 2px;
+}

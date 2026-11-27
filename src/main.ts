@@ -286,7 +286,14 @@ const ICONS = {
   collapse: svgIcon('<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15M15.5 10l-2 2 2 2"/>'),
   expand: svgIcon('<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15M13.5 10l2 2-2 2"/>'),
   close: svgIcon('<path d="M6 6l12 12M18 6 6 18"/>'),
+  // Satır içi küçük ikonlar (düğmeler, süre notu)
+  bolt: svgIcon('<path d="M13 3 5 13.5h6L10.5 21 19 10h-6z"/>'),
+  clock: svgIcon('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+  check: svgIcon('<circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.2 2.4 2.3 4.6-4.8"/>'),
+  flame: svgIcon('<path d="M12 21c-3.6 0-6.5-2.6-6.5-6.2 0-3.4 2.6-5.3 3.6-8.3.4 1.6 1.2 2.6 2.3 3.2C11.6 6.6 13 4.4 15.6 3c-.5 2.6.5 4.4 1.7 6 .9 1.3 1.7 2.9 1.7 5 0 3.8-3.2 7-7 7z"/>'),
 };
+/** Yazının yanında duran küçük ikon (boyutu yazıya göre, CSS'te .ico). */
+const ico = (svg: string) => `<span class="ico">${svg}</span>`;
 
 function headerHtml(): string {
   const streak = currentStreak(settings.dailyGoalMin);
@@ -496,7 +503,7 @@ function render(): void {
             ${focusSubject ? lockedSubjectHtml() : subjectPickerHtml()}
           </section>
           <div class="row">
-            <button id="work" class="primary">Gazzla 🚀</button>
+            <button id="work" class="primary">Gazzla ${ico(ICONS.bolt)}</button>
             ${askingNext ? `<button id="break" class="secondary">Ara ver ☕</button>` : ""}
           </div>
           <p class="key-hint desk-only">Boşluk tuşu: başlat</p>
@@ -631,7 +638,7 @@ function updateDurationUi(): void {
     .forEach((b) => b.classList.toggle("selected", Number(b.dataset.min) === min));
 
   const work = document.querySelector<HTMLButtonElement>("#work");
-  if (work) work.textContent = min > 0 ? `Gazzla · ${min} dk 🚀` : "Gazzla 🚀";
+  if (work) work.innerHTML = `${min > 0 ? `Gazzla · ${min} dk` : "Gazzla"} ${ico(ICONS.bolt)}`;
 
   const hint = document.querySelector<HTMLElement>("#duration-hint");
   if (!hint) return;
@@ -644,11 +651,11 @@ function updateDurationUi(): void {
   const { goal, done } = goalInfo("daily");
   let goalText = "";
   if (goal > 0) {
-    if (done >= goal) goalText = "Günlük hedef zaten cepte, bu seans bonus 🔥";
-    else if (done + min >= goal) goalText = "Bu seansla günlük hedefin tamam 🎯";
+    if (done >= goal) goalText = `${ico(ICONS.flame)} Günlük hedef zaten cepte, bu seans bonus`;
+    else if (done + min >= goal) goalText = `${ico(ICONS.check)} Bu seansla günlük hedefin tamam`;
     else goalText = `Bitince günlük hedefin <b>%${Math.round(((done + min) / goal) * 100)}</b>'i dolacak`;
   }
-  hint.innerHTML = `<span>⏰ <b>${endText}</b>'de bitiyor</span>${goalText ? `<span>${goalText}</span>` : ""}`;
+  hint.innerHTML = `<span>${ico(ICONS.clock)} <b>${endText}</b>'de bitiyor</span>${goalText ? `<span>${goalText}</span>` : ""}`;
 }
 
 function bindDuration(): void {
@@ -1766,7 +1773,7 @@ function renderGoals(): void {
       </div>
       <ul class="prows">${projectItems}</ul>
     </section>
-    <button class="primary" id="goals-start">Hedefe gazzla 🚀</button>`;
+    <button class="primary" id="goals-start">Hedefe gazzla ${ico(ICONS.bolt)}</button>`;
 
   document.querySelectorAll<HTMLButtonElement>("[data-gedit]").forEach((b) =>
     b.addEventListener("click", () => {
