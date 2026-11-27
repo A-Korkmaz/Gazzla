@@ -634,6 +634,24 @@ button.danger {
   margin-bottom: 8px;
 }
 
+.logo-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.logo-mark.small {
+  width: 28px;
+  height: 28px;
+}
+
+.menu-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .small-logo {
   font-size: 22px;
   font-weight: 800;

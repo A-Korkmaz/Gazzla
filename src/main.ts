@@ -263,7 +263,7 @@ function headerHtml(): string {
     <header>
       <div class="header-left">
         <button id="open-menu" class="icon big" title="Menü">☰</button>
-        <h1 class="logo">Gazzla</h1>
+        <img class="logo-mark" src="/logo.svg" alt="" /><h1 class="logo">Gazzla</h1>
       </div>
       <div class="header-right">
         <div class="streak ${streak > 0 ? "on" : ""}" title="Üst üste hedef tutturduğun gün sayısı">
@@ -621,7 +621,7 @@ function renderMenu(): void {
     <div class="menu-backdrop"></div>
     <nav class="menu">
       <div class="menu-head">
-        <span class="logo small-logo">Gazzla</span>
+        <span class="menu-brand"><img class="logo-mark small" src="/logo.svg" alt="" /><span class="logo small-logo">Gazzla</span></span>
         <button class="icon big menu-close" title="Kapat">✕</button>
       </div>
       <button class="menu-item ${!focusSubject && view === "timer" ? "active" : ""}" data-go="home" ${lock}>🏠 Ana ekran</button>
